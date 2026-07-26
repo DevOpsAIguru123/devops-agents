@@ -13,6 +13,26 @@ from typing import Any
 BLOCKING_SEVERITIES = {"HIGH", "CRITICAL"}
 
 
+def confined_path(
+    path: Path,
+    workspace_root: Path,
+    *,
+    must_exist: bool,
+) -> Path:
+    """Resolve a CLI path and reject access outside the current workspace."""
+    try:
+        resolved_root = workspace_root.resolve(strict=True)
+        resolved_path = path.resolve(strict=must_exist)
+    except OSError as exc:
+        raise ValueError(f"cannot resolve path {path}: {exc}") from exc
+
+    if not resolved_path.is_relative_to(resolved_root):
+        raise ValueError(f"path escapes workspace root: {path}")
+    if must_exist and not resolved_path.is_file():
+        raise ValueError(f"expected a report file: {path}")
+    return resolved_path
+
+
 def load_report(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -46,8 +66,16 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        image_report = load_report(args.image_report)
-        config_report = load_report(args.config_report)
+        workspace_root = Path.cwd()
+        image_report_path = confined_path(
+            args.image_report, workspace_root, must_exist=True
+        )
+        config_report_path = confined_path(
+            args.config_report, workspace_root, must_exist=True
+        )
+        output_path = confined_path(args.output, workspace_root, must_exist=False)
+        image_report = load_report(image_report_path)
+        config_report = load_report(config_report_path)
     except ValueError as exc:
         print(f"PUSH BLOCKED: {exc}", file=sys.stderr)
         return 2
@@ -105,18 +133,18 @@ def main() -> int:
         "publish_allowed": decision == "approved",
     }
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
     if decision == "blocked":
         print("PUSH BLOCKED")
         for reason in reasons:
             print(f"- {reason}")
-        print(f"Decision evidence: {args.output}")
+        print(f"Decision evidence: {output_path}")
         return 1
 
     print("PUSH APPROVED")
-    print(f"Decision evidence: {args.output}")
+    print(f"Decision evidence: {output_path}")
     return 0
 
 

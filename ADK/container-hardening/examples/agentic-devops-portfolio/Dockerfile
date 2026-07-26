@@ -1,4 +1,4 @@
-FROM nginx:1.31.3-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
+FROM nginx@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --chown=nginx:nginx index.html styles.css app.js /usr/share/nginx/html/
