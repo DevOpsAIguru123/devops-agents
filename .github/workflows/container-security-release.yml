@@ -250,6 +250,7 @@ jobs:
         working-directory: ADK/container-hardening
         env:
           GOOGLE_GENAI_USE_VERTEXAI: "true"
+          GOOGLE_CLOUD_LOCATION: "global"
           # PR code never receives the model credential. Trusted main/manual runs do.
           GOOGLE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.GOOGLE_API_KEY || '' }}
         run: >-
