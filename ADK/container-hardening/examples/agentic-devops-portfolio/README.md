@@ -66,13 +66,16 @@ Configure these GitHub repository settings before running it:
 | --- | --- | --- |
 | Secret | `SONAR_TOKEN` | SonarQube project analysis token |
 | Secret | `SONAR_HOST_URL` | SonarQube URL, such as `https://sonar.example.com` |
+| Secret | `SONAR_ORGANIZATION` | SonarQube Cloud organization key |
 | Secret | `DOCKERHUB_TOKEN` | Docker Hub access token; do not use the account password |
 | Secret | `DOCKERHUB_USERNAME` | Docker Hub namespace |
 | Secret | `DOCKERHUB_REPOSITORY` | Existing public Docker Hub repository name |
 
 Create a SonarQube project whose key is `agentic-devops-portfolio`, matching
-`sonar-project.properties`. Configure the Docker Hub repository as public in
-Docker Hub; pushing an image does not itself change repository visibility.
+`sonar-project.properties`. For SonarQube Cloud, set `SONAR_ORGANIZATION` to
+the organization **key** shown in the SonarQube Cloud organization settings,
+not the display name. Configure the Docker Hub repository as public in Docker
+Hub; pushing an image does not itself change repository visibility.
 
 To configure the settings without exposing tokens in the repository, edit the
 git-ignored `.github/container-release.settings` placeholder file from the

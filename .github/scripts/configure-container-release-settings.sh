@@ -15,6 +15,7 @@ read_setting() {
 }
 
 sonar_host_url="$(read_setting SONAR_HOST_URL)"
+sonar_organization="$(read_setting SONAR_ORGANIZATION)"
 sonar_token="$(read_setting SONAR_TOKEN)"
 dockerhub_username="$(read_setting DOCKERHUB_USERNAME)"
 dockerhub_repository="$(read_setting DOCKERHUB_REPOSITORY)"
@@ -30,6 +31,7 @@ require_real_value() {
 }
 
 require_real_value SONAR_HOST_URL "$sonar_host_url"
+require_real_value SONAR_ORGANIZATION "$sonar_organization"
 require_real_value SONAR_TOKEN "$sonar_token"
 require_real_value DOCKERHUB_USERNAME "$dockerhub_username"
 require_real_value DOCKERHUB_REPOSITORY "$dockerhub_repository"
@@ -42,10 +44,11 @@ if [[ -z "$repository" ]]; then
 fi
 
 printf '%s' "$sonar_token" | gh secret set SONAR_TOKEN --repo "$repository"
+printf '%s' "$sonar_organization" | gh secret set SONAR_ORGANIZATION --repo "$repository"
 printf '%s' "$dockerhub_token" | gh secret set DOCKERHUB_TOKEN --repo "$repository"
 printf '%s' "$sonar_host_url" | gh secret set SONAR_HOST_URL --repo "$repository"
 printf '%s' "$dockerhub_username" | gh secret set DOCKERHUB_USERNAME --repo "$repository"
 printf '%s' "$dockerhub_repository" | gh secret set DOCKERHUB_REPOSITORY --repo "$repository"
 
 echo "Configured GitHub Actions settings for $repository:"
-echo "- secrets: SONAR_TOKEN, SONAR_HOST_URL, DOCKERHUB_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_REPOSITORY"
+echo "- secrets: SONAR_TOKEN, SONAR_HOST_URL, SONAR_ORGANIZATION, DOCKERHUB_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_REPOSITORY"

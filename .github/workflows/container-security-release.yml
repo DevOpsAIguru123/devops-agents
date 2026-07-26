@@ -54,14 +54,18 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
         run: |
           test -n "$SONAR_TOKEN" || { echo "Missing SONAR_TOKEN repository secret"; exit 1; }
-          test -n "$SONAR_HOST_URL" || { echo "Missing SONAR_HOST_URL repository variable"; exit 1; }
+          test -n "$SONAR_HOST_URL" || { echo "Missing SONAR_HOST_URL repository secret"; exit 1; }
+          test -n "$SONAR_ORGANIZATION" || { echo "Missing SONAR_ORGANIZATION repository secret"; exit 1; }
 
       - name: Analyze source with SonarQube
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         with:
           projectBaseDir: ${{ env.APP_DIR }}
+          args: >-
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
