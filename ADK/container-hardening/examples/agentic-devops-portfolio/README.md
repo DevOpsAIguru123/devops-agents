@@ -56,9 +56,24 @@ uses three isolated jobs:
 
 1. SonarQube source analysis and Quality Gate enforcement.
 2. Local image build, separate Trivy image/configuration scans, and the
-   deterministic release-policy gate.
+   deterministic release-policy gate. Every Trivy occurrence is also ranked
+   into an advisory triage queue, rendered in the Actions job summary, retained
+   as Markdown/JSON/SARIF evidence, and uploaded to GitHub Code Scanning when
+   that repository feature is available.
 3. Docker Hub authentication and push, which can run only after both earlier
    jobs succeed and the machine-readable decision says `publish_allowed: true`.
+
+The generated `ci-triage.md` is the team-facing report; reviewers can read it
+without downloading an artifact. `ci-triage.json` is the complete
+machine-readable queue, and `ci-trivy.sarif` supplies repository Security-tab
+alerts and pull-request annotations. The triage verdict is deliberately
+advisory: scanner output alone cannot prove runtime exploitability, and
+`policy_decision: not_evaluated` is never approval. Only
+`ci-policy-decision.json` can authorize the publishing job.
+
+If a release is blocked, reporting and evidence upload still run before the job
+fails. This gives developers and security reviewers the explanation needed to
+remediate the candidate without weakening the fail-closed release gate.
 
 Configure these GitHub repository settings before running it:
 

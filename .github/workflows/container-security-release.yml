@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 concurrency:
   group: container-security-release-${{ github.ref }}
@@ -132,6 +133,7 @@ jobs:
 
       - name: Apply deterministic release policy
         id: release-policy
+        continue-on-error: true
         working-directory: ${{ env.APP_DIR }}
         run: >-
           python3 scripts/evaluate_release.py
@@ -139,24 +141,63 @@ jobs:
           --config-report reports/ci-config-trivy.json
           --output reports/ci-policy-decision.json
 
+      - name: Triage every Trivy finding and publish the run summary
+        if: always()
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          python3 scripts/triage_trivy.py \
+            --image-report reports/ci-image-trivy.json \
+            --config-report reports/ci-config-trivy.json \
+            --policy-report reports/ci-policy-decision.json \
+            --dockerfile "$SELECTED_DOCKERFILE" \
+            --json-output reports/ci-triage.json \
+            --markdown-output reports/ci-triage.md \
+            --sarif-output reports/ci-trivy.sarif
+          cat reports/ci-triage.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send Trivy findings to GitHub Code Scanning
+        if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-trivy.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        with:
+          sarif_file: ${{ env.APP_DIR }}/reports/ci-trivy.sarif
+          category: trivy-container-security
+
       - name: Upload scan evidence even when policy blocks
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: container-security-reports-${{ github.run_id }}
           path: |
             ${{ env.APP_DIR }}/reports/ci-image-trivy.json
             ${{ env.APP_DIR }}/reports/ci-config-trivy.json
             ${{ env.APP_DIR }}/reports/ci-policy-decision.json
+            ${{ env.APP_DIR }}/reports/ci-triage.json
+            ${{ env.APP_DIR }}/reports/ci-triage.md
+            ${{ env.APP_DIR }}/reports/ci-trivy.sarif
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Enforce release policy and required reporting
+        if: always()
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          RELEASE_POLICY_OUTCOME: ${{ steps.release-policy.outcome }}
+        run: |
+          test "$RELEASE_POLICY_OUTCOME" = "success" || {
+            echo "Release policy blocked this candidate"
+            exit 1
+          }
+          test -s reports/ci-triage.json
+          test -s reports/ci-triage.md
+          test -s reports/ci-trivy.sarif
 
       - name: Package the authorized local image
         working-directory: ${{ env.APP_DIR }}
         run: docker save --output reports/release-image.tar "$LOCAL_IMAGE"
 
       - name: Upload authorized release bundle
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: authorized-container-${{ github.run_id }}
           path: |
@@ -179,7 +220,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download authorized release bundle
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: authorized-container-${{ github.run_id }}
           path: release
