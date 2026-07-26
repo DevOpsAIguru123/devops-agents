@@ -52,7 +52,7 @@ blocked result makes the push step unreachable.
 ## GitHub Actions release pipeline
 
 The repository workflow `.github/workflows/container-security-release.yml`
-uses three isolated jobs:
+uses four isolated jobs:
 
 1. SonarQube source analysis and Quality Gate enforcement.
 2. Local image build, separate Trivy image/configuration scans, and the
@@ -60,8 +60,12 @@ uses three isolated jobs:
    into an advisory triage queue, rendered in the Actions job summary, retained
    as Markdown/JSON/SARIF evidence, and uploaded to GitHub Code Scanning when
    that repository feature is available.
-3. Docker Hub authentication and push, which can run only after both earlier
-   jobs succeed and the machine-readable decision says `publish_allowed: true`.
+3. A separate Vertex AI/ADK advisory stage that consumes the bounded,
+   secret-safe deterministic triage data and proposes prioritized remediation,
+   compatibility checks, attack-path hypotheses, and verification steps.
+4. Docker Hub authentication and push, which can run only after the Sonar and
+   deterministic container-security jobs succeed and the machine-readable
+   decision says `publish_allowed: true`.
 
 The generated `ci-triage.md` is the team-facing report; reviewers can read it
 without downloading an artifact. `ci-triage.json` is the complete
@@ -74,6 +78,13 @@ advisory: scanner output alone cannot prove runtime exploitability, and
 If a release is blocked, reporting and evidence upload still run before the job
 fails. This gives developers and security reviewers the explanation needed to
 remediate the candidate without weakening the fail-closed release gate.
+
+The ADK job is deliberately non-authoritative. A model outage or malformed
+model response is recorded as `agent_status: unavailable` and cannot approve,
+block, or change a release decision. Pull-request code receives no Vertex AI
+credential; it produces the deterministic report plus an explicit unavailable
+agent report. Trusted `main` and manually dispatched runs use the existing
+`GOOGLE_API_KEY` repository secret to run the real model-backed stage.
 
 Configure these GitHub repository settings before running it:
 

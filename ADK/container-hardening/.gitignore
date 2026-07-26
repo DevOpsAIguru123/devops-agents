@@ -191,6 +191,8 @@ Thumbs.db
 
 # Agent CLI specific
 .persist_vector_store
+.ci-agent-input/
+/reports/ci-agent-*
 tests/load_test/.results/*.html
 tests/load_test/.results/*.csv
 .locust_env
