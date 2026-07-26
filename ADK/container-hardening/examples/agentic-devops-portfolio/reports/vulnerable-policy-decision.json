@@ -1,0 +1,36 @@
+{
+  "schema_version": "container-release-policy/v1",
+  "artifact_name": "agentic-devops-portfolio:vulnerable-demo",
+  "image_id": "sha256:17a440013c6dd3b76b0e9c4a8ebfa08293beceaeabcadffc14118d2ce8ecd65e",
+  "policy_decision": "blocked",
+  "policy_rules": {
+    "block_severities": [
+      "CRITICAL",
+      "HIGH"
+    ],
+    "block_any_secret": true,
+    "fail_closed_on_invalid_report": true
+  },
+  "summary": {
+    "vulnerability_occurrences": 347,
+    "vulnerability_severity_counts": {
+      "CRITICAL": 5,
+      "HIGH": 60,
+      "LOW": 120,
+      "MEDIUM": 126,
+      "UNKNOWN": 36
+    },
+    "misconfigurations": 25,
+    "misconfiguration_severity_counts": {
+      "HIGH": 7,
+      "LOW": 13,
+      "MEDIUM": 5
+    },
+    "secrets": 0
+  },
+  "blocking_reasons": [
+    "65 HIGH/CRITICAL vulnerability occurrences",
+    "7 HIGH/CRITICAL misconfigurations"
+  ],
+  "publish_allowed": false
+}
