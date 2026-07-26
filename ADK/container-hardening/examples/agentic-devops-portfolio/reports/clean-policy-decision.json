@@ -1,0 +1,23 @@
+{
+  "schema_version": "container-release-policy/v1",
+  "artifact_name": "agentic-devops-portfolio:local",
+  "image_id": "sha256:3b33669de833a38e33e677cdebfdbb2f46fe0bf547943a2e5e304d9b717c5af6",
+  "policy_decision": "approved",
+  "policy_rules": {
+    "block_severities": [
+      "CRITICAL",
+      "HIGH"
+    ],
+    "block_any_secret": true,
+    "fail_closed_on_invalid_report": true
+  },
+  "summary": {
+    "vulnerability_occurrences": 0,
+    "vulnerability_severity_counts": {},
+    "misconfigurations": 0,
+    "misconfiguration_severity_counts": {},
+    "secrets": 0
+  },
+  "blocking_reasons": [],
+  "publish_allowed": true
+}

@@ -1,0 +1,218 @@
+name: Container security release
+
+on:
+  pull_request:
+    paths:
+      - "ADK/container-hardening/examples/agentic-devops-portfolio/**"
+      - ".github/workflows/container-security-release.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ADK/container-hardening/examples/agentic-devops-portfolio/**"
+      - ".github/workflows/container-security-release.yml"
+  workflow_dispatch:
+    inputs:
+      dockerfile:
+        description: Image definition to build and scan
+        required: true
+        default: Dockerfile
+        type: choice
+        options:
+          - Dockerfile
+          - Dockerfile.vulnerable
+      publish:
+        description: Publish after every quality and security gate passes
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-security-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_DIR: ADK/container-hardening/examples/agentic-devops-portfolio
+  LOCAL_IMAGE: agentic-devops-portfolio-ci:${{ github.sha }}
+  SELECTED_DOCKERFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.dockerfile || 'Dockerfile' }}
+
+jobs:
+  sonarqube:
+    name: SonarQube quality gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Require SonarQube configuration
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          test -n "$SONAR_TOKEN" || { echo "Missing SONAR_TOKEN repository secret"; exit 1; }
+          test -n "$SONAR_HOST_URL" || { echo "Missing SONAR_HOST_URL repository variable"; exit 1; }
+
+      - name: Analyze source with SonarQube
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        with:
+          projectBaseDir: ${{ env.APP_DIR }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Enforce SonarQube quality gate
+        uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
+        timeout-minutes: 10
+        with:
+          pollingTimeoutSec: 600
+          scanMetadataReportFile: ${{ env.APP_DIR }}/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  container-security:
+    name: Build, scan, and authorize
+    needs: sonarqube
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare reports and selected configuration
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          mkdir -p reports .ci-config-scan
+          cp "$SELECTED_DOCKERFILE" .ci-config-scan/Dockerfile
+          if [ "$SELECTED_DOCKERFILE" = "Dockerfile.vulnerable" ]; then
+            cp deployment.vulnerable.yaml .ci-config-scan/deployment.yaml
+          fi
+
+      - name: Build local candidate without publishing
+        working-directory: ${{ env.APP_DIR }}
+        run: >-
+          docker build
+          --file "$SELECTED_DOCKERFILE"
+          --tag "$LOCAL_IMAGE"
+          .
+
+      - name: Generate Trivy image vulnerability and secret report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          scanners: vuln,secret
+          format: json
+          output: ${{ env.APP_DIR }}/reports/ci-image-trivy.json
+          exit-code: "0"
+          version: v0.72.0
+
+      - name: Generate separate Trivy configuration report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: ${{ env.APP_DIR }}/.ci-config-scan
+          scanners: misconfig
+          format: json
+          output: ${{ env.APP_DIR }}/reports/ci-config-trivy.json
+          exit-code: "0"
+          version: v0.72.0
+          skip-setup-trivy: true
+
+      - name: Apply deterministic release policy
+        id: release-policy
+        working-directory: ${{ env.APP_DIR }}
+        run: >-
+          python3 scripts/evaluate_release.py
+          --image-report reports/ci-image-trivy.json
+          --config-report reports/ci-config-trivy.json
+          --output reports/ci-policy-decision.json
+
+      - name: Upload scan evidence even when policy blocks
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: container-security-reports-${{ github.run_id }}
+          path: |
+            ${{ env.APP_DIR }}/reports/ci-image-trivy.json
+            ${{ env.APP_DIR }}/reports/ci-config-trivy.json
+            ${{ env.APP_DIR }}/reports/ci-policy-decision.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Package the authorized local image
+        working-directory: ${{ env.APP_DIR }}
+        run: docker save --output reports/release-image.tar "$LOCAL_IMAGE"
+
+      - name: Upload authorized release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: authorized-container-${{ github.run_id }}
+          path: |
+            ${{ env.APP_DIR }}/reports/release-image.tar
+            ${{ env.APP_DIR }}/reports/ci-policy-decision.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    name: Publish authorized image
+    needs:
+      - sonarqube
+      - container-security
+    if: >-
+      success() &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download authorized release bundle
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: authorized-container-${{ github.run_id }}
+          path: release
+
+      - name: Verify explicit policy authorization
+        run: >-
+          python3 -c
+          'import json; from pathlib import Path;
+          d=json.loads(Path("release/ci-policy-decision.json").read_text());
+          assert d.get("policy_decision") == "approved" and d.get("publish_allowed") is True,
+          "release policy did not authorize publishing"'
+
+      - name: Require Docker Hub configuration
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_REPOSITORY }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME" || { echo "Missing DOCKERHUB_USERNAME repository variable"; exit 1; }
+          test -n "$DOCKERHUB_REPOSITORY" || { echo "Missing DOCKERHUB_REPOSITORY repository variable"; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo "Missing DOCKERHUB_TOKEN repository secret"; exit 1; }
+          case "$DOCKERHUB_USERNAME" in *[!a-z0-9_-]*|'') echo "Invalid Docker Hub username"; exit 1;; esac
+          case "$DOCKERHUB_REPOSITORY" in *[!a-z0-9._-]*|'') echo "Invalid Docker Hub repository"; exit 1;; esac
+
+      - name: Load the exact scanned image
+        run: docker load --input release/release-image.tar
+
+      - name: Authenticate to Docker Hub only after authorization
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag and push immutable and latest tags
+        env:
+          RELEASE_REPOSITORY: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY }}
+        run: |
+          docker tag "$LOCAL_IMAGE" "$RELEASE_REPOSITORY:$GITHUB_SHA"
+          docker tag "$LOCAL_IMAGE" "$RELEASE_REPOSITORY:latest"
+          docker push "$RELEASE_REPOSITORY:$GITHUB_SHA"
+          docker push "$RELEASE_REPOSITORY:latest"

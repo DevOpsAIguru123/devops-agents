@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .env
+.github/container-release.settings
 .venv/
 .pytest_cache/
 .terraform/
