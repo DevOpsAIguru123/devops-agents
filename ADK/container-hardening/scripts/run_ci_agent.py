@@ -264,7 +264,10 @@ async def generate(triage: dict[str, Any], max_findings: int) -> dict[str, Any]:
         "failure_category": None,
     }
 
-    if not os.getenv("GOOGLE_API_KEY"):
+    if not (
+        os.getenv("GOOGLE_API_KEY")
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    ):
         result["failure_category"] = "credentials_unavailable"
         return result
 

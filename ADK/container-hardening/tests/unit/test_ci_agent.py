@@ -53,6 +53,7 @@ def test_agent_envelope_is_bounded_and_allowlisted() -> None:
 
 def test_missing_credentials_produce_non_authoritative_fallback(monkeypatch) -> None:
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
 
     result = asyncio.run(generate(triage_payload(), max_findings=2))
 
