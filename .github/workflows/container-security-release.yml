@@ -80,7 +80,9 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: Enforce SonarQube quality gate
-        if: github.event_name != 'pull_request'
+        # SonarCloud has no feature-branch gate on the current plan. Enforce the
+        # gate only for the trusted main branch, where publishing is possible.
+        if: github.ref == 'refs/heads/main'
         uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
         timeout-minutes: 10
         with:
@@ -282,7 +284,8 @@ jobs:
       needs.sonarqube.result == 'success' &&
       needs.container-security.result == 'success' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish))
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' && inputs.publish))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
