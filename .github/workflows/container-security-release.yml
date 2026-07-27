@@ -30,7 +30,7 @@ on:
           - Dockerfile
           - Dockerfile.vulnerable
       publish:
-        description: Publish after every quality and security gate passes
+        description: Publish after every quality, security, and approval gate passes
         required: true
         default: false
         type: boolean
@@ -301,7 +301,7 @@ jobs:
       github.ref == 'refs/heads/main' && inputs.publish) ||
       (github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/codex/gemini-api-secret-agent' &&
-      inputs.approval_test && !inputs.publish))
+      ((inputs.approval_test && !inputs.publish) || inputs.publish)))
     environment:
       name: container-production
     runs-on: ubuntu-24.04
@@ -319,7 +319,10 @@ jobs:
       needs.release-approval.result == 'success' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main' && inputs.publish))
+      github.ref == 'refs/heads/main' && inputs.publish) ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/codex/gemini-api-secret-agent' &&
+      inputs.publish))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -358,11 +361,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Tag and push immutable and latest tags
+      - name: Tag and push authorized release tags
         env:
           RELEASE_REPOSITORY: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY }}
         run: |
-          docker tag "$LOCAL_IMAGE" "$RELEASE_REPOSITORY:$GITHUB_SHA"
-          docker tag "$LOCAL_IMAGE" "$RELEASE_REPOSITORY:latest"
-          docker push "$RELEASE_REPOSITORY:$GITHUB_SHA"
-          docker push "$RELEASE_REPOSITORY:latest"
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            docker tag "$LOCAL_IMAGE" "$RELEASE_REPOSITORY:$GITHUB_SHA"
+            docker tag "$LOCAL_IMAGE" "$RELEASE_REPOSITORY:latest"
+            docker push "$RELEASE_REPOSITORY:$GITHUB_SHA"
+            docker push "$RELEASE_REPOSITORY:latest"
+          else
+            docker tag "$LOCAL_IMAGE" "$RELEASE_REPOSITORY:feature-$GITHUB_SHA"
+            docker push "$RELEASE_REPOSITORY:feature-$GITHUB_SHA"
+          fi

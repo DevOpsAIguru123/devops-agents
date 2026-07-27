@@ -130,3 +130,9 @@ To exercise the protected-environment approval UI without publishing, dispatch
 the workflow from `codex/gemini-api-secret-agent` with `approval_test: true`
 and `publish: false`. The release-approval job waits for the configured
 reviewer, records the approval, and the Docker Hub publish job remains skipped.
+
+To test the complete publish path from that dedicated feature branch, dispatch
+with `publish: true` and approve the protected environment. A successful run
+pushes only the immutable `feature-<commit-sha>` tag. It never overwrites the
+production `latest` tag; SHA and `latest` publication remain exclusive to
+`main`.
