@@ -249,15 +249,15 @@ def main() -> int:
         workspace_root = Path.cwd()
         sonar_path = confined_path(args.sonar_report, workspace_root, must_exist=True)
         trivy_path = confined_path(args.trivy_report, workspace_root, must_exist=True)
-        json_path = confined_path(JSON_OUTPUT_PATH, workspace_root, must_exist=False)
-        markdown_path = confined_path(
-            MARKDOWN_OUTPUT_PATH, workspace_root, must_exist=False
-        )
         report = build_payload(load_object(sonar_path), load_object(trivy_path))
-        json_path.parent.mkdir(parents=True, exist_ok=True)
-        markdown_path.parent.mkdir(parents=True, exist_ok=True)
-        json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        markdown_path.write_text(render_markdown(report) + "\n", encoding="utf-8")
+        JSON_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        MARKDOWN_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        JSON_OUTPUT_PATH.write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
+        MARKDOWN_OUTPUT_PATH.write_text(
+            render_markdown(report) + "\n", encoding="utf-8"
+        )
     except ValueError as exc:
         parser.error(str(exc))
     print(f"Aggregated {report['summary']['total_actionable_items']} actionable items")

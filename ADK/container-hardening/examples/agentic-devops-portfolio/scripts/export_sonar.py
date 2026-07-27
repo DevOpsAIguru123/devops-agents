@@ -178,7 +178,6 @@ def main() -> int:
         properties_path = confined_path(
             args.project_properties, workspace_root, must_exist=True
         )
-        output_path = confined_path(OUTPUT_PATH, workspace_root, must_exist=False)
         task = read_properties(report_task_path)
         project = read_properties(properties_path)
         project_key = project["sonar.projectKey"]
@@ -238,8 +237,8 @@ def main() -> int:
             "findings": normalized_issues,
             "hotspots": [normalize_hotspot(item) for item in hotspots],
         }
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     except (KeyError, OSError, ValueError) as exc:
         parser.error(str(exc))
 
