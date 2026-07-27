@@ -96,7 +96,6 @@ jobs:
           --project-properties sonar-project.properties
           --pull-request "$SONAR_PULL_REQUEST"
           --branch "$SONAR_BRANCH"
-          --output reports/ci-sonar.json
 
       - name: Upload normalized SonarQube evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -276,9 +275,7 @@ jobs:
         run: |
           python3 scripts/aggregate_security_reports.py \
             --sonar-report .ci-unified-input/sonar/ci-sonar.json \
-            --trivy-report .ci-unified-input/trivy/ci-triage.json \
-            --json-output reports/ci-unified-security.json \
-            --markdown-output reports/ci-unified-security.md
+            --trivy-report .ci-unified-input/trivy/ci-triage.json
           cat reports/ci-unified-security.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload unified team report

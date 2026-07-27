@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+JSON_OUTPUT_PATH = Path("reports/ci-unified-security.json")
+MARKDOWN_OUTPUT_PATH = Path("reports/ci-unified-security.md")
+
 
 def confined_path(path: Path, workspace_root: Path, *, must_exist: bool) -> Path:
     """Resolve a CLI path and reject access outside the current workspace."""
@@ -241,16 +244,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sonar-report", type=Path, required=True)
     parser.add_argument("--trivy-report", type=Path, required=True)
-    parser.add_argument("--json-output", type=Path, required=True)
-    parser.add_argument("--markdown-output", type=Path, required=True)
     args = parser.parse_args()
     try:
         workspace_root = Path.cwd()
         sonar_path = confined_path(args.sonar_report, workspace_root, must_exist=True)
         trivy_path = confined_path(args.trivy_report, workspace_root, must_exist=True)
-        json_path = confined_path(args.json_output, workspace_root, must_exist=False)
+        json_path = confined_path(JSON_OUTPUT_PATH, workspace_root, must_exist=False)
         markdown_path = confined_path(
-            args.markdown_output, workspace_root, must_exist=False
+            MARKDOWN_OUTPUT_PATH, workspace_root, must_exist=False
         )
         report = build_payload(load_object(sonar_path), load_object(trivy_path))
         json_path.parent.mkdir(parents=True, exist_ok=True)

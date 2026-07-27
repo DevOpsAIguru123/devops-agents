@@ -75,10 +75,6 @@ def test_combines_code_hotspot_and_container_findings(tmp_path: Path) -> None:
             "sonar.json",
             "--trivy-report",
             "trivy.json",
-            "--json-output",
-            "report.json",
-            "--markdown-output",
-            "report.md",
         ],
         cwd=tmp_path,
         check=False,
@@ -87,13 +83,19 @@ def test_combines_code_hotspot_and_container_findings(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    report = json.loads(
+        (tmp_path / "reports" / "ci-unified-security.json").read_text(
+            encoding="utf-8"
+        )
+    )
     assert report["summary"]["total_actionable_items"] == 3
     assert report["summary"]["sonar_open_issues"] == 1
     assert report["summary"]["sonar_security_hotspots"] == 1
     assert report["summary"]["trivy_findings"] == 1
     assert report["authority"]["publish_authorized"] is False
-    markdown = (tmp_path / "report.md").read_text(encoding="utf-8")
+    markdown = (tmp_path / "reports" / "ci-unified-security.md").read_text(
+        encoding="utf-8"
+    )
     assert "Sonar code findings" in markdown
     assert "CVE-2026-0001" in markdown
     assert "policy_decision: not_evaluated` is not approval" in markdown
@@ -118,10 +120,6 @@ def test_clean_inputs_produce_explicit_zero_finding_report(tmp_path: Path) -> No
             "sonar.json",
             "--trivy-report",
             "trivy.json",
-            "--json-output",
-            "report.json",
-            "--markdown-output",
-            "report.md",
         ],
         cwd=tmp_path,
         check=False,
@@ -130,9 +128,15 @@ def test_clean_inputs_produce_explicit_zero_finding_report(tmp_path: Path) -> No
     )
 
     assert result.returncode == 0, result.stderr
-    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    report = json.loads(
+        (tmp_path / "reports" / "ci-unified-security.json").read_text(
+            encoding="utf-8"
+        )
+    )
     assert report["summary"]["total_actionable_items"] == 0
     assert report["authority"]["publish_authorized"] is True
-    markdown = (tmp_path / "report.md").read_text(encoding="utf-8")
+    markdown = (tmp_path / "reports" / "ci-unified-security.md").read_text(
+        encoding="utf-8"
+    )
     assert "No open Sonar code issues" in markdown
     assert "No Trivy vulnerability" in markdown

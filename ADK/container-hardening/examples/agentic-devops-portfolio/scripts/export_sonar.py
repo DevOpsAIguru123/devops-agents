@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 
 ALLOWED_HOSTS = {"sonarcloud.io", "sonarqube.us"}
 SEVERITY_ORDER = {"BLOCKER": 0, "CRITICAL": 1, "MAJOR": 2, "MINOR": 3, "INFO": 4}
+OUTPUT_PATH = Path("reports/ci-sonar.json")
 
 
 def confined_path(path: Path, workspace_root: Path, *, must_exist: bool) -> Path:
@@ -163,7 +164,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report-task", type=Path, required=True)
     parser.add_argument("--project-properties", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--pull-request", default="")
     parser.add_argument("--branch", default="")
     parser.add_argument("--timeout", type=int, default=600)
@@ -178,7 +178,7 @@ def main() -> int:
         properties_path = confined_path(
             args.project_properties, workspace_root, must_exist=True
         )
-        output_path = confined_path(args.output, workspace_root, must_exist=False)
+        output_path = confined_path(OUTPUT_PATH, workspace_root, must_exist=False)
         task = read_properties(report_task_path)
         project = read_properties(properties_path)
         project_key = project["sonar.projectKey"]
