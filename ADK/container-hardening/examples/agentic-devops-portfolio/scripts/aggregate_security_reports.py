@@ -12,6 +12,20 @@ from typing import Any
 from urllib.parse import urlparse
 
 
+def confined_path(path: Path, workspace_root: Path, *, must_exist: bool) -> Path:
+    """Resolve a CLI path and reject access outside the current workspace."""
+    try:
+        resolved_root = workspace_root.resolve(strict=True)
+        resolved_path = path.resolve(strict=must_exist)
+    except OSError as exc:
+        raise ValueError(f"cannot resolve path {path}: {exc}") from exc
+    if not resolved_path.is_relative_to(resolved_root):
+        raise ValueError(f"path escapes workspace root: {path}")
+    if must_exist and not resolved_path.is_file():
+        raise ValueError(f"expected a report file: {path}")
+    return resolved_path
+
+
 def load_object(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -89,37 +103,9 @@ def build_payload(sonar: dict[str, Any], trivy: dict[str, Any]) -> dict[str, Any
     }
 
 
-def render_markdown(report: dict[str, Any]) -> str:
-    authority = report["authority"]
-    summary = report["summary"]
-    sonar = report["code_scan"]
-    trivy = report["image_and_configuration_scan"]
+def render_code_findings(sonar: dict[str, Any]) -> list[str]:
     code_findings = rows(sonar.get("findings"))
-    hotspots = rows(sonar.get("hotspots"))
-    container_findings = rows(trivy.get("findings"))
-    lines = [
-        "# Unified DevSecOps security report",
-        "",
-        "## Release decisions",
-        "",
-        f"- Sonar quality gate: **{markdown(authority['sonar_quality_gate'])}**",
-        f"- Deterministic container policy: **{markdown(authority['container_release_policy'])}**",
-        f"- Image publishing authorized by policy: **{str(authority['publish_authorized']).lower()}**",
-        "",
-        "> Sonar and Trivy decisions are independent. Only the deterministic container "
-        "release policy authorizes image publishing. `policy_decision: not_evaluated` is not approval.",
-        "",
-        "## Executive summary",
-        "",
-        "| Scanner | Scope | Findings requiring attention | Gate |",
-        "| --- | --- | ---: | --- |",
-        f"| SonarQube Cloud | Source code | {summary['sonar_open_issues']} issues + {summary['sonar_security_hotspots']} hotspots | {markdown(authority['sonar_quality_gate'])} |",
-        f"| Trivy | Image, dependencies, secrets, configuration | {summary['trivy_findings']} | {markdown(authority['container_release_policy'])} |",
-        f"| **Combined** | Full release candidate | **{summary['total_actionable_items']}** | Both gates remain authoritative in their scope |",
-        "",
-        "## Sonar code findings",
-        "",
-    ]
+    lines = ["## Sonar code findings", ""]
     dashboard = safe_link(sonar.get("dashboard_url"))
     if dashboard:
         lines.extend([f"[Open analysis in SonarQube Cloud]({dashboard})", ""])
@@ -146,8 +132,12 @@ def render_markdown(report: dict[str, Any]) -> str:
             )
     else:
         lines.append("No open Sonar code issues were reported.")
+    return lines
 
-    lines.extend(["", "## Sonar security hotspots", ""])
+
+def render_hotspots(sonar: dict[str, Any]) -> list[str]:
+    hotspots = rows(sonar.get("hotspots"))
+    lines = ["## Sonar security hotspots", ""]
     if hotspots:
         lines.extend(
             [
@@ -170,8 +160,12 @@ def render_markdown(report: dict[str, Any]) -> str:
             )
     else:
         lines.append("No Sonar security hotspots were reported.")
+    return lines
 
-    lines.extend(["", "## Trivy image and configuration findings", ""])
+
+def render_container_findings(trivy: dict[str, Any]) -> list[str]:
+    container_findings = rows(trivy.get("findings"))
+    lines = ["## Trivy image and configuration findings", ""]
     if container_findings:
         lines.extend(
             [
@@ -193,6 +187,40 @@ def render_markdown(report: dict[str, Any]) -> str:
             )
     else:
         lines.append("No Trivy vulnerability, secret, or failed configuration findings were reported.")
+    return lines
+
+
+def render_markdown(report: dict[str, Any]) -> str:
+    authority = report["authority"]
+    summary = report["summary"]
+    sonar = report["code_scan"]
+    trivy = report["image_and_configuration_scan"]
+    lines = [
+        "# Unified DevSecOps security report",
+        "",
+        "## Release decisions",
+        "",
+        f"- Sonar quality gate: **{markdown(authority['sonar_quality_gate'])}**",
+        f"- Deterministic container policy: **{markdown(authority['container_release_policy'])}**",
+        f"- Image publishing authorized by policy: **{str(authority['publish_authorized']).lower()}**",
+        "",
+        "> Sonar and Trivy decisions are independent. Only the deterministic container "
+        "release policy authorizes image publishing. `policy_decision: not_evaluated` is not approval.",
+        "",
+        "## Executive summary",
+        "",
+        "| Scanner | Scope | Findings requiring attention | Gate |",
+        "| --- | --- | ---: | --- |",
+        f"| SonarQube Cloud | Source code | {summary['sonar_open_issues']} issues + {summary['sonar_security_hotspots']} hotspots | {markdown(authority['sonar_quality_gate'])} |",
+        f"| Trivy | Image, dependencies, secrets, configuration | {summary['trivy_findings']} | {markdown(authority['container_release_policy'])} |",
+        f"| **Combined** | Full release candidate | **{summary['total_actionable_items']}** | Both gates remain authoritative in their scope |",
+        "",
+        *render_code_findings(sonar),
+        "",
+        *render_hotspots(sonar),
+        "",
+        *render_container_findings(trivy),
+    ]
 
     lines.extend(
         [
@@ -217,11 +245,18 @@ def main() -> int:
     parser.add_argument("--markdown-output", type=Path, required=True)
     args = parser.parse_args()
     try:
-        report = build_payload(load_object(args.sonar_report), load_object(args.trivy_report))
-        args.json_output.parent.mkdir(parents=True, exist_ok=True)
-        args.markdown_output.parent.mkdir(parents=True, exist_ok=True)
-        args.json_output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        args.markdown_output.write_text(render_markdown(report) + "\n", encoding="utf-8")
+        workspace_root = Path.cwd()
+        sonar_path = confined_path(args.sonar_report, workspace_root, must_exist=True)
+        trivy_path = confined_path(args.trivy_report, workspace_root, must_exist=True)
+        json_path = confined_path(args.json_output, workspace_root, must_exist=False)
+        markdown_path = confined_path(
+            args.markdown_output, workspace_root, must_exist=False
+        )
+        report = build_payload(load_object(sonar_path), load_object(trivy_path))
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        markdown_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        markdown_path.write_text(render_markdown(report) + "\n", encoding="utf-8")
     except ValueError as exc:
         parser.error(str(exc))
     print(f"Aggregated {report['summary']['total_actionable_items']} actionable items")

@@ -17,6 +17,20 @@ ALLOWED_HOSTS = {"sonarcloud.io", "sonarqube.us"}
 SEVERITY_ORDER = {"BLOCKER": 0, "CRITICAL": 1, "MAJOR": 2, "MINOR": 3, "INFO": 4}
 
 
+def confined_path(path: Path, workspace_root: Path, *, must_exist: bool) -> Path:
+    """Resolve a CLI path and reject access outside the current workspace."""
+    try:
+        resolved_root = workspace_root.resolve(strict=True)
+        resolved_path = path.resolve(strict=must_exist)
+    except OSError as exc:
+        raise ValueError(f"cannot resolve path {path}: {exc}") from exc
+    if not resolved_path.is_relative_to(resolved_root):
+        raise ValueError(f"path escapes workspace root: {path}")
+    if must_exist and not resolved_path.is_file():
+        raise ValueError(f"expected an input file: {path}")
+    return resolved_path
+
+
 def read_properties(path: Path) -> dict[str, str]:
     properties: dict[str, str] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -80,7 +94,7 @@ def wait_for_analysis(client: SonarClient, ce_task_url: str, timeout: int) -> st
         try:
             with urlopen(request, timeout=30) as response:
                 payload = json.load(response)
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise ValueError(f"could not read Sonar analysis status: {exc}") from exc
         task = payload.get("task", {}) if isinstance(payload, dict) else {}
         status = str(task.get("status", "UNKNOWN"))
@@ -159,8 +173,14 @@ def main() -> int:
     if not token:
         parser.error("SONAR_TOKEN is required")
     try:
-        task = read_properties(args.report_task)
-        project = read_properties(args.project_properties)
+        workspace_root = Path.cwd()
+        report_task_path = confined_path(args.report_task, workspace_root, must_exist=True)
+        properties_path = confined_path(
+            args.project_properties, workspace_root, must_exist=True
+        )
+        output_path = confined_path(args.output, workspace_root, must_exist=False)
+        task = read_properties(report_task_path)
+        project = read_properties(properties_path)
         project_key = project["sonar.projectKey"]
         client = SonarClient(task["serverUrl"], token)
         analysis_id = wait_for_analysis(client, task["ceTaskUrl"], args.timeout)
@@ -218,8 +238,8 @@ def main() -> int:
             "findings": normalized_issues,
             "hotspots": [normalize_hotspot(item) for item in hotspots],
         }
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     except (KeyError, OSError, ValueError) as exc:
         parser.error(str(exc))
 
