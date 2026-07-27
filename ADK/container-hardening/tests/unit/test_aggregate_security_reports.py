@@ -92,7 +92,8 @@ def test_combines_code_hotspot_and_container_findings(tmp_path: Path) -> None:
     assert report["summary"]["sonar_open_issues"] == 1
     assert report["summary"]["sonar_security_hotspots"] == 1
     assert report["summary"]["trivy_findings"] == 1
-    assert report["authority"]["publish_authorized"] is False
+    assert report["authority"]["container_policy_authorized"] is False
+    assert report["authority"]["overall_release_ready"] is False
     markdown = (tmp_path / "reports" / "ci-unified-security.md").read_text(
         encoding="utf-8"
     )
@@ -134,7 +135,8 @@ def test_clean_inputs_produce_explicit_zero_finding_report(tmp_path: Path) -> No
         )
     )
     assert report["summary"]["total_actionable_items"] == 0
-    assert report["authority"]["publish_authorized"] is True
+    assert report["authority"]["container_policy_authorized"] is True
+    assert report["authority"]["overall_release_ready"] is True
     markdown = (tmp_path / "reports" / "ci-unified-security.md").read_text(
         encoding="utf-8"
     )

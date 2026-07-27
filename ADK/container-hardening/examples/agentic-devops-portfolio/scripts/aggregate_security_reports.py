@@ -80,7 +80,10 @@ def build_payload(sonar: dict[str, Any], trivy: dict[str, Any]) -> dict[str, Any
         "authority": {
             "sonar_quality_gate": quality_status,
             "container_release_policy": policy_decision,
-            "publish_authorized": policy_decision == "approved",
+            "container_policy_authorized": policy_decision == "approved",
+            "overall_release_ready": (
+                quality_status == "OK" and policy_decision == "approved"
+            ),
             "notice": (
                 "Sonar and Trivy decisions are independent. Only the deterministic "
                 "container release policy authorizes image publishing. "
@@ -202,7 +205,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         f"- Sonar quality gate: **{markdown(authority['sonar_quality_gate'])}**",
         f"- Deterministic container policy: **{markdown(authority['container_release_policy'])}**",
-        f"- Image publishing authorized by policy: **{str(authority['publish_authorized']).lower()}**",
+        f"- Container policy authorization: **{str(authority['container_policy_authorized']).lower()}**",
+        f"- Overall release ready: **{str(authority['overall_release_ready']).lower()}**",
         "",
         "> Sonar and Trivy decisions are independent. Only the deterministic container "
         "release policy authorizes image publishing. `policy_decision: not_evaluated` is not approval.",
