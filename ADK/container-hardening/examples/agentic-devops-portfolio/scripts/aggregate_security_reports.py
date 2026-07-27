@@ -11,9 +11,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-JSON_OUTPUT_PATH = Path("reports/ci-unified-security.json")
-MARKDOWN_OUTPUT_PATH = Path("reports/ci-unified-security.md")
-
 
 def confined_path(path: Path, workspace_root: Path, *, must_exist: bool) -> Path:
     """Resolve a CLI path and reject access outside the current workspace."""
@@ -250,14 +247,16 @@ def main() -> int:
         sonar_path = confined_path(args.sonar_report, workspace_root, must_exist=True)
         trivy_path = confined_path(args.trivy_report, workspace_root, must_exist=True)
         report = build_payload(load_object(sonar_path), load_object(trivy_path))
-        JSON_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        MARKDOWN_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        JSON_OUTPUT_PATH.write_text(
-            json.dumps(report, indent=2) + "\n", encoding="utf-8"
-        )
-        MARKDOWN_OUTPUT_PATH.write_text(
-            render_markdown(report) + "\n", encoding="utf-8"
-        )
+        Path("reports").mkdir(parents=True, exist_ok=True)
+        with open(
+            "reports/ci-unified-security.json", "w", encoding="utf-8"
+        ) as json_output:
+            json.dump(report, json_output, indent=2)
+            json_output.write("\n")
+        with open(
+            "reports/ci-unified-security.md", "w", encoding="utf-8"
+        ) as markdown_output:
+            markdown_output.write(render_markdown(report) + "\n")
     except ValueError as exc:
         parser.error(str(exc))
     print(f"Aggregated {report['summary']['total_actionable_items']} actionable items")

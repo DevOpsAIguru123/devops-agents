@@ -15,7 +15,6 @@ from urllib.request import Request, urlopen
 
 ALLOWED_HOSTS = {"sonarcloud.io", "sonarqube.us"}
 SEVERITY_ORDER = {"BLOCKER": 0, "CRITICAL": 1, "MAJOR": 2, "MINOR": 3, "INFO": 4}
-OUTPUT_PATH = Path("reports/ci-sonar.json")
 
 
 def confined_path(path: Path, workspace_root: Path, *, must_exist: bool) -> Path:
@@ -237,8 +236,10 @@ def main() -> int:
             "findings": normalized_issues,
             "hotspots": [normalize_hotspot(item) for item in hotspots],
         }
-        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        Path("reports").mkdir(parents=True, exist_ok=True)
+        with open("reports/ci-sonar.json", "w", encoding="utf-8") as output_file:
+            json.dump(payload, output_file, indent=2)
+            output_file.write("\n")
     except (KeyError, OSError, ValueError) as exc:
         parser.error(str(exc))
 
