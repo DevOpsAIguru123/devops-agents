@@ -350,7 +350,12 @@ def image_findings(triage: dict[str, Any]) -> list[dict[str, Any]]:
     findings = triage.get("findings")
     if not isinstance(findings, list):
         raise ValueError("invalid sanitized image triage report: findings must be a list")
-    return [item for item in findings if isinstance(item, dict)]
+    return [
+        item
+        for item in findings
+        if isinstance(item, dict)
+        and str(item.get("kind") or "").lower() in {"vulnerability", "secret"}
+    ]
 
 
 def render_image_report(triage: dict[str, Any]) -> str:
@@ -409,6 +414,139 @@ def render_image_report(triage: dict[str, Any]) -> str:
     return document(
         "Container Image Security Report",
         f"Sanitized Trivy findings for {triage.get('artifact_name') or 'the release candidate'}",
+        body,
+    )
+
+
+def string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str) and item.strip()]
+
+
+def html_list(items: list[str], empty_message: str) -> str:
+    if not items:
+        return f"<p>{text(empty_message)}</p>"
+    return "<ul>" + "".join(f"<li>{text(item)}</li>" for item in items) + "</ul>"
+
+
+def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -> str:
+    """Render the authoritative scanner decisions with a bounded ADK advisory."""
+    authority = unified.get("authority") if isinstance(unified.get("authority"), dict) else {}
+    summary = unified.get("summary") if isinstance(unified.get("summary"), dict) else {}
+    sonar = unified.get("code_scan") if isinstance(unified.get("code_scan"), dict) else {}
+    triage = (
+        unified.get("image_and_configuration_scan")
+        if isinstance(unified.get("image_and_configuration_scan"), dict)
+        else {}
+    )
+    code_findings = sonar_rows(sonar, "findings")
+    hotspots = sonar_rows(sonar, "hotspots")
+    container_findings = image_findings(triage)
+    sonar_status = str(authority.get("sonar_quality_gate") or "UNKNOWN")
+    policy_decision = str(authority.get("container_release_policy") or "not_evaluated")
+    release_ready = bool(authority.get("overall_release_ready"))
+    release_status = "approved" if release_ready else "blocked"
+    agent_status = str(agent.get("agent_status") or "unavailable")
+    agent_review = agent.get("review") if isinstance(agent.get("review"), dict) else {}
+
+    decision_rows = [
+        ("SonarQube code quality", sonar_status, "Source-code quality and security rules"),
+        ("Trivy container release policy", policy_decision, "Vulnerabilities, secrets, and configuration"),
+        ("ADK advisory", agent_status, "Non-authoritative prioritization and remediation guidance"),
+        ("Overall deterministic release", release_status, "Requires every authoritative gate to pass"),
+    ]
+    decision_table = (
+        "<table><thead><tr><th style='width:28%'>Control</th><th style='width:18%'>Status</th>"
+        "<th>Meaning</th></tr></thead><tbody>"
+        + "".join(
+            f"<tr><td>{text(control)}</td><td><strong>{text(status)}</strong></td><td>{text(meaning)}</td></tr>"
+            for control, status, meaning in decision_rows
+        )
+        + "</tbody></table>"
+    )
+
+    prioritized_rows = []
+    for item in container_findings[:20]:
+        prioritized_rows.append(
+            "<tr>"
+            f'<td class="nowrap sev-{text(severity(item.get("severity")).lower())}">{text(severity(item.get("severity")))}</td>'
+            f"<td>{text(item.get('kind'))}</td><td>{text(item.get('id'))}</td>"
+            f"<td>{text(item.get('component'))}</td>"
+            f"<td>{'BLOCK' if item.get('policy_blocking') else 'review'}</td>"
+            f"<td>{text(item.get('recommended_action'))}</td></tr>"
+        )
+    prioritized_header = (
+        "<thead><tr><th style='width:9%'>Severity</th><th style='width:10%'>Type</th>"
+        "<th style='width:14%'>ID</th><th style='width:18%'>Component</th>"
+        "<th style='width:8%'>Policy</th><th>Required remediation</th></tr></thead>"
+    )
+
+    executive_summary = str(
+        agent_review.get("executive_summary")
+        or "The model-backed advisory was unavailable; deterministic scanner evidence remains authoritative."
+    )
+    risk_assessment = str(
+        agent_review.get("risk_assessment")
+        or "No model-backed risk assessment was produced for this run."
+    )
+    actions = string_list(agent_review.get("prioritized_actions"))
+    attack_paths = string_list(agent_review.get("attack_paths"))
+    verification_steps = string_list(agent_review.get("verification_steps"))
+    limitations = string_list(agent_review.get("limitations"))
+
+    body = (
+        "<section><h2>Technical summary</h2>"
+        f"<p>The deterministic release status is <strong class='decision {text(release_status)}'>{text(release_status)}</strong>. "
+        f"SonarQube reported <strong>{text(sonar_status)}</strong> and the Trivy release policy reported "
+        f"<strong>{text(policy_decision)}</strong>. The ADK agent status is <strong>{text(agent_status)}</strong>; its output "
+        "is advisory and cannot approve, reject, waive, or override either scanner gate.</p>"
+        + metric_cards(
+            [
+                ("Release status", release_status, release_status),
+                ("Code issues", len(code_findings), "review" if code_findings else "approved"),
+                ("Security hotspots", len(hotspots), "review" if hotspots else "approved"),
+                ("Container findings", len(container_findings), "review" if container_findings else "approved"),
+            ]
+        )
+        + "</section><section><h2>Authoritative gates and advisory status</h2>"
+        "<p>This matrix separates deterministic authorization from AI-assisted interpretation. "
+        "<code>policy_decision: not_evaluated</code> is not approval.</p>"
+        + decision_table
+        + "</section><section><h2>Findings that drive release risk</h2>"
+        f"<p>The combined evidence contains {text(summary.get('total_actionable_items', 0))} actionable items. "
+        "The table shows up to the first 20 deterministic container findings in policy-prioritized order; detailed "
+        "code/configuration and image reports remain the audit surfaces for complete finding lists.</p>"
+        + paged_tables(prioritized_header, prioritized_rows, 6)
+        + "</section><section><h2>ADK advisory interpretation</h2>"
+        f"<div class='notice'><strong>Agent status: {text(agent_status)}.</strong> {text(executive_summary)}</div>"
+        f"<h3>Risk assessment</h3><p>{text(risk_assessment)}</p>"
+        + "<h3>Prioritized actions</h3>"
+        + html_list(actions, "No additional agent-prioritized actions were returned.")
+        + "<h3>Potential attack paths</h3>"
+        + html_list(attack_paths, "No additional attack paths were returned.")
+        + "</section><section><h2>Scope and methodology</h2>"
+        "<p>SonarQube supplies source-code findings and its quality-gate decision. Trivy supplies configuration, package "
+        "vulnerability, and secret-detection evidence for the exact candidate. Deterministic scripts normalize findings and "
+        "enforce release policy before the ADK agent receives bounded, sanitized evidence.</p></section>"
+        "<section><h2>Limitations and robustness</h2>"
+        + html_list(
+            limitations,
+            "Static scanning does not establish runtime reachability, deployment compliance, or the absence of zero-day vulnerabilities.",
+        )
+        + "<p>The agent may be unavailable without invalidating completed deterministic scans. Scanner databases and "
+        "Sonar rules can change over time, so the immutable image digest must be rescanned continuously.</p></section>"
+        "<section><h2>Recommended verification before release</h2>"
+        + html_list(
+            verification_steps,
+            "Re-run every required scanner and verify the protected approval against the same immutable image digest.",
+        )
+        + "</section><section><h2>Further questions</h2><p>Are provenance attestations, SBOM publication, registry "
+        "rescanning, runtime controls, and deployed-digest verification enforced outside this workflow?</p></section>"
+    )
+    return document(
+        "Consolidated Release Security Report",
+        "SonarQube, Trivy, deterministic policy, and bounded ADK advisory evidence",
         body,
     )
 
@@ -521,15 +659,37 @@ def write_image_report() -> None:
     )
 
 
+def write_consolidated_report() -> None:
+    unified = load_json(Path("reports/ci-unified-security.json"))
+    agent_path = Path("reports/ci-agent-review.json")
+    agent = (
+        load_json(agent_path)
+        if agent_path.is_file()
+        else {"agent_status": "unavailable", "failure_category": "report_missing"}
+    )
+    rendered = render_consolidated_report(unified, agent)
+    with open("reports/ci-consolidated-security-report.html", "w", encoding="utf-8") as output:
+        output.write(rendered)
+    print_pdf(
+        Path("reports/ci-consolidated-security-report.html"),
+        Path("reports/ci-consolidated-security-report.pdf"),
+        "Consolidated Release Security Report",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("report_type", choices=("configuration", "prebuild", "image"))
+    parser.add_argument(
+        "report_type", choices=("configuration", "prebuild", "image", "consolidated")
+    )
     args = parser.parse_args()
     try:
         if args.report_type == "configuration":
             write_config_report()
         elif args.report_type == "prebuild":
             write_prebuild_report()
+        elif args.report_type == "consolidated":
+            write_consolidated_report()
         else:
             write_image_report()
     except ValueError as exc:

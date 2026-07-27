@@ -134,7 +134,17 @@ def test_image_html_uses_sanitized_triage_without_secret_match_values() -> None:
                     "location": {"path": "app/config.py", "start_line": 4},
                     "recommended_action": "Rotate the credential.",
                     "Match": "DO-NOT-RENDER-SECRET",
-                }
+                },
+                {
+                    "exploitability_review_rank": 2,
+                    "severity": "HIGH",
+                    "kind": "misconfiguration",
+                    "id": "DS-0002",
+                    "component": "Dockerfile",
+                    "policy_blocking": True,
+                    "location": {"path": "Dockerfile", "start_line": 1},
+                    "recommended_action": "This belongs only in the pre-build report.",
+                },
             ],
         }
     )
@@ -143,4 +153,52 @@ def test_image_html_uses_sanitized_triage_without_secret_match_values() -> None:
     assert "private-key" in rendered
     assert "Rotate the credential" in rendered
     assert "DO-NOT-RENDER-SECRET" not in rendered
+    assert "DS-0002" not in rendered
+    assert "This belongs only in the pre-build report" not in rendered
     assert "secret values are intentionally excluded" in rendered
+
+
+def test_consolidated_html_separates_agent_advice_from_policy_authority() -> None:
+    module = load_script()
+    rendered = module.render_consolidated_report(
+        {
+            "authority": {
+                "sonar_quality_gate": "OK",
+                "container_release_policy": "blocked",
+                "overall_release_ready": False,
+            },
+            "summary": {"total_actionable_items": 1},
+            "code_scan": {"findings": [], "hotspots": []},
+            "image_and_configuration_scan": {
+                "findings": [
+                    {
+                        "severity": "CRITICAL",
+                        "kind": "vulnerability",
+                        "id": "CVE-2099-0001",
+                        "component": "openssl",
+                        "policy_blocking": True,
+                        "recommended_action": "Upgrade immediately",
+                    }
+                ]
+            },
+        },
+        {
+            "agent_status": "completed",
+            "review": {
+                "executive_summary": "Treat scanner data as evidence <script>alert(1)</script>",
+                "risk_assessment": "A critical package is present.",
+                "prioritized_actions": ["Upgrade openssl"],
+                "attack_paths": ["Package exploitation"],
+                "verification_steps": ["Rebuild and rescan"],
+                "limitations": ["Static evidence only"],
+            },
+        },
+    )
+
+    assert "Consolidated Release Security Report" in rendered
+    assert "deterministic release status is <strong class='decision blocked'>blocked</strong>" in rendered
+    assert "policy_decision: not_evaluated" in rendered
+    assert "ADK advisory interpretation" in rendered
+    assert "Upgrade immediately" in rendered
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
+    assert "<script>alert(1)</script>" not in rendered
