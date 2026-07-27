@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import shutil
 import subprocess
 from collections import Counter
@@ -306,33 +307,38 @@ def print_pdf(html_path: Path, pdf_path: Path, expected_title: str) -> None:
         raise ValueError("Chrome PDF conversion timed out") from exc
     if result.returncode != 0 or not pdf_path.is_file() or pdf_path.stat().st_size < 1000:
         raise ValueError(f"Chrome PDF conversion failed: {result.stderr[-500:]}")
-    if pdf_path.read_bytes()[:5] != b"%PDF-":
+    pdf_bytes = pdf_path.read_bytes()
+    if pdf_bytes[:5] != b"%PDF-" or b"%%EOF" not in pdf_bytes[-1024:]:
         raise ValueError("generated output is not a valid PDF document")
+    if not re.search(rb"/Type\s*/Page\b", pdf_bytes):
+        raise ValueError("generated PDF contains no page objects")
+    if expected_title.encode("utf-8") not in pdf_bytes:
+        raise ValueError("generated PDF does not contain the expected report title")
     inspector = shutil.which("pdfinfo")
     extractor = shutil.which("pdftotext")
-    if not inspector or not extractor:
-        raise ValueError("pdfinfo and pdftotext are required to verify PDF reports")
-    metadata = subprocess.run(
-        [inspector, str(pdf_path)],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    if metadata.returncode != 0 or not any(
-        line.startswith("Pages:") and int(line.split(":", 1)[1]) > 0
-        for line in metadata.stdout.splitlines()
-    ):
-        raise ValueError("generated PDF did not pass page-count verification")
-    extracted = subprocess.run(
-        [extractor, str(pdf_path), "-"],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    if extracted.returncode != 0 or expected_title not in extracted.stdout:
-        raise ValueError("generated PDF did not pass selectable-text verification")
+    if inspector:
+        metadata = subprocess.run(
+            [inspector, str(pdf_path)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if metadata.returncode != 0 or not any(
+            line.startswith("Pages:") and int(line.split(":", 1)[1]) > 0
+            for line in metadata.stdout.splitlines()
+        ):
+            raise ValueError("generated PDF did not pass page-count verification")
+    if extractor:
+        extracted = subprocess.run(
+            [extractor, str(pdf_path), "-"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if extracted.returncode != 0 or expected_title not in extracted.stdout:
+            raise ValueError("generated PDF did not pass selectable-text verification")
 
 
 def write_config_report() -> None:

@@ -96,7 +96,9 @@ Each scan stage also produces printable, sanitized reports:
   included.
 
 The PDFs are generated from the corresponding self-contained HTML using
-headless Chrome and verified for non-empty, searchable text before upload.
+headless Chrome. Required verification checks the PDF signature, trailer,
+page objects, size, and embedded report title. When Poppler is available,
+page-count and selectable-text verification run as additional checks.
 
 If a release is blocked, reporting and evidence upload still run before the job
 fails. This gives developers and security reviewers the explanation needed to
