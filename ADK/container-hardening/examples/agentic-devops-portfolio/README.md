@@ -60,7 +60,7 @@ uses four isolated jobs:
    into an advisory triage queue, rendered in the Actions job summary, retained
    as Markdown/JSON/SARIF evidence, and uploaded to GitHub Code Scanning when
    that repository feature is available.
-3. A separate Vertex AI/ADK advisory stage that consumes the bounded,
+3. A separate Gemini/ADK advisory stage that consumes the bounded,
    secret-safe deterministic triage data and proposes prioritized remediation,
    compatibility checks, attack-path hypotheses, and verification steps.
 4. Docker Hub authentication and push, which can run only after the Sonar and
@@ -81,10 +81,10 @@ remediate the candidate without weakening the fail-closed release gate.
 
 The ADK job is deliberately non-authoritative. A model outage or malformed
 model response is recorded as `agent_status: unavailable` and cannot approve,
-block, or change a release decision. Pull-request code receives no Vertex AI
-credential; it produces the deterministic report plus an explicit unavailable
-agent report. Trusted `main` and manually dispatched runs use the existing
-`GOOGLE_API_KEY` repository secret to run the real model-backed stage.
+block, or change a release decision. Pull-request code receives no Gemini API
+key; it produces the deterministic report plus an explicit unavailable agent
+report. Trusted `main` runs use the `GOOGLE_API_KEY` repository secret to run
+the real model-backed stage through the Gemini Developer API.
 
 Configure these GitHub repository settings before running it:
 
@@ -96,6 +96,7 @@ Configure these GitHub repository settings before running it:
 | Secret | `DOCKERHUB_TOKEN` | Docker Hub access token; do not use the account password |
 | Secret | `DOCKERHUB_USERNAME` | Docker Hub namespace |
 | Secret | `DOCKERHUB_REPOSITORY` | Existing public Docker Hub repository name |
+| Secret | `GOOGLE_API_KEY` | Gemini Developer API key used only by trusted `main` runs |
 
 Create a SonarQube project whose key is `agentic-devops-portfolio`, matching
 `sonar-project.properties`. For SonarQube Cloud, set `SONAR_ORGANIZATION` to

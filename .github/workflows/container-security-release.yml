@@ -224,7 +224,6 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
-      id-token: write
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -247,22 +246,12 @@ jobs:
         working-directory: ADK/container-hardening
         run: uv sync --frozen --no-dev
 
-      - name: Authenticate to Google Cloud with Workload Identity Federation
-        # The WIF provider intentionally trusts only the release branch.
-        if: github.ref == 'refs/heads/main'
-        continue-on-error: true
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - name: Run Vertex AI ADK advisory agent
+      - name: Run Gemini ADK advisory agent
         working-directory: ADK/container-hardening
         env:
-          GOOGLE_GENAI_USE_VERTEXAI: "true"
-          GOOGLE_CLOUD_PROJECT: ${{ github.event_name != 'pull_request' && secrets.GOOGLE_CLOUD_PROJECT || '' }}
-          GOOGLE_CLOUD_LOCATION: "global"
-          # PR code never receives cloud credentials. Trusted runs use short-lived WIF ADC.
+          GOOGLE_GENAI_USE_VERTEXAI: "false"
+          # Only trusted main-branch code receives the Gemini API key.
+          GOOGLE_API_KEY: ${{ github.ref == 'refs/heads/main' && secrets.GOOGLE_API_KEY || '' }}
         run: >-
           uv run --no-sync python scripts/run_ci_agent.py
           --triage-report .ci-agent-input/ci-triage.json
