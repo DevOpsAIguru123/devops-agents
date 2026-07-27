@@ -84,6 +84,28 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
+      - name: Export SonarQube code findings
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PULL_REQUEST: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+          SONAR_BRANCH: ${{ github.event_name != 'pull_request' && github.ref_name || '' }}
+        run: >-
+          python3 scripts/export_sonar.py
+          --report-task .scannerwork/report-task.txt
+          --project-properties sonar-project.properties
+          --pull-request "$SONAR_PULL_REQUEST"
+          --branch "$SONAR_BRANCH"
+          --output reports/ci-sonar.json
+
+      - name: Upload normalized SonarQube evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sonar-security-report-${{ github.run_id }}
+          path: ${{ env.APP_DIR }}/reports/ci-sonar.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Enforce SonarQube quality gate
         # SonarCloud has no feature-branch gate on the current plan. Enforce the
         # gate only for the trusted main branch, where publishing is possible.
@@ -222,6 +244,53 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+  unified-report:
+    name: Unified code and container report
+    needs:
+      - sonarqube
+      - container-security
+    if: >-
+      always() &&
+      needs.sonarqube.result != 'skipped' &&
+      needs.container-security.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download SonarQube evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sonar-security-report-${{ github.run_id }}
+          path: ${{ env.APP_DIR }}/.ci-unified-input/sonar
+
+      - name: Download Trivy evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: container-security-reports-${{ github.run_id }}
+          path: ${{ env.APP_DIR }}/.ci-unified-input/trivy
+
+      - name: Aggregate code and container findings
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          python3 scripts/aggregate_security_reports.py \
+            --sonar-report .ci-unified-input/sonar/ci-sonar.json \
+            --trivy-report .ci-unified-input/trivy/ci-triage.json \
+            --json-output reports/ci-unified-security.json \
+            --markdown-output reports/ci-unified-security.md
+          cat reports/ci-unified-security.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unified team report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unified-security-report-${{ github.run_id }}
+          path: |
+            ${{ env.APP_DIR }}/reports/ci-unified-security.json
+            ${{ env.APP_DIR }}/reports/ci-unified-security.md
+          if-no-files-found: error
+          retention-days: 30
+
   agent-triage:
     name: ADK agent advisory triage
     needs: container-security
@@ -291,11 +360,13 @@ jobs:
     needs:
       - sonarqube
       - container-security
+      - unified-report
       - agent-triage
     if: >-
       always() &&
       needs.sonarqube.result == 'success' &&
       needs.container-security.result == 'success' &&
+      needs.unified-report.result == 'success' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main' && inputs.publish) ||

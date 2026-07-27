@@ -52,7 +52,7 @@ blocked result makes the push step unreachable.
 ## GitHub Actions release pipeline
 
 The repository workflow `.github/workflows/container-security-release.yml`
-uses four isolated jobs:
+uses isolated jobs:
 
 1. SonarQube source analysis and Quality Gate enforcement.
 2. Local image build, separate Trivy image/configuration scans, and the
@@ -60,22 +60,26 @@ uses four isolated jobs:
    into an advisory triage queue, rendered in the Actions job summary, retained
    as Markdown/JSON/SARIF evidence, and uploaded to GitHub Code Scanning when
    that repository feature is available.
-3. A separate Vertex AI/ADK advisory stage that consumes the bounded,
+3. A report aggregation stage that exports SonarQube Cloud findings and joins
+   them with the normalized Trivy image/configuration triage. It publishes one
+   complete Markdown report for people and one JSON report for automation.
+4. A separate Vertex AI/ADK advisory stage that consumes the bounded,
    secret-safe deterministic triage data and proposes prioritized remediation,
    compatibility checks, attack-path hypotheses, and verification steps.
-4. A required-reviewer approval gate on the protected
+5. A required-reviewer approval gate on the protected
    `container-production` GitHub Environment, followed by Docker Hub
    authentication and push. The publish job is reachable only after the Sonar
    and deterministic container-security jobs succeed and the machine-readable
    decision says `publish_allowed: true`.
 
-The generated `ci-triage.md` is the team-facing report; reviewers can read it
-without downloading an artifact. `ci-triage.json` is the complete
-machine-readable queue, and `ci-trivy.sarif` supplies repository Security-tab
-alerts and pull-request annotations. The triage verdict is deliberately
-advisory: scanner output alone cannot prove runtime exploitability, and
-`policy_decision: not_evaluated` is never approval. Only
-`ci-policy-decision.json` can authorize the publishing job.
+The generated `ci-unified-security.md` is the primary team-facing report and is
+rendered directly in the Actions job summary. Its companion
+`ci-unified-security.json` retains the complete Sonar code findings, security
+hotspots, Trivy image/configuration findings, metrics, and independent gate
+outcomes. The original `ci-triage.json`, `ci-triage.md`, and `ci-trivy.sarif`
+remain available as scanner-specific evidence and GitHub Security-tab input.
+Scanner and agent triage are advisory: `policy_decision: not_evaluated` is
+never approval. Only `ci-policy-decision.json` can authorize publishing.
 
 If a release is blocked, reporting and evidence upload still run before the job
 fails. This gives developers and security reviewers the explanation needed to
