@@ -28,6 +28,19 @@ def test_analysis_context_prefers_pull_request() -> None:
     assert module.analysis_params("", "") == {}
 
 
+def test_effective_context_uses_the_dashboard_context() -> None:
+    module = load_script()
+    assert module.effective_analysis_params(
+        "https://sonarcloud.io/dashboard?id=portfolio&pullRequest=42", "42", ""
+    ) == {"pullRequest": "42"}
+    assert module.effective_analysis_params(
+        "https://sonarcloud.io/dashboard?id=portfolio&branch=feature", "", "feature"
+    ) == {"branch": "feature"}
+    assert module.effective_analysis_params(
+        "https://sonarcloud.io/dashboard?id=portfolio", "", "feature"
+    ) == {}
+
+
 def test_rejects_non_sonar_and_non_https_servers() -> None:
     module = load_script()
     for url in ("http://sonarcloud.io", "https://example.com", "file:///tmp/report"):

@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 ALLOWED_HOSTS = {"sonarcloud.io", "sonarqube.us"}
@@ -76,6 +76,19 @@ def analysis_params(pull_request: str, branch: str) -> dict[str, str]:
     if pull_request:
         return {"pullRequest": pull_request}
     if branch:
+        return {"branch": branch}
+    return {}
+
+
+def effective_analysis_params(
+    dashboard_url: str, pull_request: str, branch: str
+) -> dict[str, str]:
+    """Use only a branch context that Sonar actually created for the analysis."""
+    query = parse_qs(urlparse(dashboard_url).query)
+    if pull_request:
+        return {"pullRequest": query.get("pullRequest", [pull_request])[0]}
+    dashboard_branch = query.get("branch", [""])[0]
+    if branch and dashboard_branch == branch:
         return {"branch": branch}
     return {}
 
@@ -182,7 +195,9 @@ def main() -> int:
         project_key = project["sonar.projectKey"]
         client = SonarClient(task["serverUrl"], token)
         analysis_id = wait_for_analysis(client, task["ceTaskUrl"], args.timeout)
-        context = analysis_params(args.pull_request, args.branch)
+        context = effective_analysis_params(
+            task.get("dashboardUrl", ""), args.pull_request, args.branch
+        )
         issues = fetch_pages(
             client,
             "/api/issues/search",
@@ -225,7 +240,7 @@ def main() -> int:
             "source": "sonarqube-cloud",
             "project_key": project_key,
             "analysis_id": analysis_id,
-            "analysis_context": context or {"branch": "main"},
+            "analysis_context": context or {"default_branch": True},
             "dashboard_url": task.get("dashboardUrl"),
             "quality_gate": quality_gate,
             "measures": measures,
