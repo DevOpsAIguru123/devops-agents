@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render sanitized Trivy configuration or image findings as HTML and PDF."""
+"""Render sanitized pre-build or container findings as HTML and PDF."""
 
 from __future__ import annotations
 
@@ -205,6 +205,147 @@ def render_config_report(report: dict[str, Any], policy: dict[str, Any]) -> str:
     )
 
 
+def sonar_rows(report: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    value = report.get(key)
+    if not isinstance(value, list):
+        raise ValueError(f"invalid Sonar report: {key} must be a list")
+    return [item for item in value if isinstance(item, dict)]
+
+
+def sonar_severity_style(value: Any) -> str:
+    normalized = str(value or "UNKNOWN").upper()
+    if normalized in {"BLOCKER", "CRITICAL", "HIGH"}:
+        return "blocked"
+    if normalized in {"MAJOR", "MEDIUM"}:
+        return "review"
+    return "approved"
+
+
+def render_prebuild_report(
+    sonar: dict[str, Any], config: dict[str, Any], policy: dict[str, Any]
+) -> str:
+    """Combine code analysis and configuration evidence before image construction."""
+    issues = sonar_rows(sonar, "findings")
+    hotspots = sonar_rows(sonar, "hotspots")
+    misconfigurations = config_findings(config)
+    quality_gate = sonar.get("quality_gate")
+    sonar_status = (
+        str(quality_gate.get("status") or "UNKNOWN")
+        if isinstance(quality_gate, dict)
+        else "UNKNOWN"
+    )
+    config_decision = str(policy.get("policy_decision") or "not_evaluated")
+    blocking = int((policy.get("summary") or {}).get("blocking_findings") or 0)
+
+    issue_table_rows = []
+    for item in issues:
+        location = str(item.get("component") or "unknown")
+        if item.get("line"):
+            location += f":{item['line']}"
+        issue_table_rows.append(
+            "<tr>"
+            f'<td class="nowrap {text(sonar_severity_style(item.get("severity")))}">{text(item.get("severity"))}</td>'
+            f"<td>{text(item.get('kind'))}</td><td>{text(item.get('rule'))}</td>"
+            f"<td><code>{text(location)}</code></td><td>{text(item.get('message'))}</td>"
+            f"<td>{text(item.get('status'))}</td></tr>"
+        )
+    issue_header = (
+        "<thead><tr><th style='width:10%'>Severity</th><th style='width:10%'>Type</th>"
+        "<th style='width:15%'>Rule</th><th style='width:20%'>Location</th>"
+        "<th>Finding</th><th style='width:10%'>Status</th></tr></thead>"
+    )
+
+    hotspot_table_rows = []
+    for item in hotspots:
+        location = str(item.get("component") or "unknown")
+        if item.get("line"):
+            location += f":{item['line']}"
+        hotspot_table_rows.append(
+            "<tr>"
+            f'<td class="nowrap {text(sonar_severity_style(item.get("severity")))}">{text(item.get("severity"))}</td>'
+            f"<td>{text(item.get('rule'))}</td><td><code>{text(location)}</code></td>"
+            f"<td>{text(item.get('message'))}</td><td>{text(item.get('status'))}</td></tr>"
+        )
+    hotspot_header = (
+        "<thead><tr><th style='width:12%'>Priority</th><th style='width:18%'>Category</th>"
+        "<th style='width:25%'>Location</th><th>Finding</th>"
+        "<th style='width:14%'>Review status</th></tr></thead>"
+    )
+
+    config_table_rows = []
+    for item in misconfigurations:
+        identifier = text(item["id"])
+        if item["reference"]:
+            identifier = f'<a href="{text(item["reference"])}">{identifier}</a>'
+        config_table_rows.append(
+            "<tr>"
+            f'<td class="nowrap sev-{text(item["severity"].lower())}">{text(item["severity"])}</td>'
+            f"<td>{identifier}</td><td>{text(item['title'])}</td>"
+            f"<td><code>{text(item['target'])}:{item['line']}</code></td>"
+            f"<td>{text(item['resolution'])}</td></tr>"
+        )
+    config_header = (
+        "<thead><tr><th style='width:9%'>Severity</th><th style='width:13%'>ID</th>"
+        "<th style='width:22%'>Finding</th><th style='width:21%'>Location</th>"
+        "<th>Required remediation</th></tr></thead>"
+    )
+
+    dashboard = safe_url(sonar.get("dashboard_url"))
+    dashboard_link = (
+        f'<p><a href="{text(dashboard)}">Open the complete analysis in SonarQube Cloud</a>.</p>'
+        if dashboard
+        else ""
+    )
+    prebuild_status = (
+        "approved"
+        if config_decision == "approved" and sonar_status == "OK"
+        else "blocked"
+    )
+    body = (
+        "<section><h2>Technical summary</h2>"
+        f"<p>The combined pre-build status is <strong class='decision {text(prebuild_status)}'>{text(prebuild_status)}</strong>. "
+        f"SonarQube reported a quality-gate status of <strong>{text(sonar_status)}</strong>, while the Trivy configuration "
+        f"policy decision is <strong>{text(config_decision)}</strong>. On a protected release branch, either failed required "
+        "gate prevents the image build. Diagnostic feature-branch execution does not turn a failed scanner status into approval.</p>"
+        + metric_cards(
+            [
+                ("Pre-build status", prebuild_status, prebuild_status),
+                ("Sonar issues", len(issues), "review" if issues else "approved"),
+                ("Security hotspots", len(hotspots), "review" if hotspots else "approved"),
+                ("Blocking config", blocking, "blocked" if blocking else "approved"),
+            ]
+        )
+        + "</section><section><h2>Source-code findings requiring attention</h2>"
+        "<p>SonarQube findings are static-analysis results for the source revision selected by this workflow. "
+        "Resolve code issues and review security hotspots before treating the code gate as satisfied.</p>"
+        + dashboard_link
+        + paged_tables(issue_header, issue_table_rows, 6)
+        + "</section><section><h2>Security hotspots requiring review</h2>"
+        "<p>Hotspots require a human security review; their presence is not automatically proof of a vulnerability.</p>"
+        + paged_tables(hotspot_header, hotspot_table_rows, 5)
+        + "</section><section><h2>Configuration findings blocking or qualifying the build</h2>"
+        "<p>Trivy evaluated the exact Dockerfile and selected deployment configuration before image construction.</p>"
+        + paged_tables(config_header, config_table_rows, 5)
+        + "</section><section><h2>Scope and methodology</h2>"
+        "<p>SonarQube analyzes source-code quality and security rules. Trivy independently evaluates Dockerfile and IaC "
+        "configuration. The deterministic configuration policy fails closed on invalid evidence and blocks failed HIGH or "
+        "CRITICAL misconfigurations.</p></section>"
+        "<section><h2>Limitations and robustness</h2><div class='notice'>Static analysis cannot establish runtime "
+        "reachability or deployed compliance. A stopped pipeline has no built image, so container vulnerability results do "
+        "not exist yet. The final release policy and protected approval remain authoritative.</div></section>"
+        "<section><h2>Recommended next steps</h2><ol><li>Fix every blocking configuration finding at its reported location.</li>"
+        "<li>Resolve Sonar code issues and review security hotspots.</li><li>Re-run this pre-build stage until its required "
+        "gates pass.</li><li>Only then build and scan the immutable container image.</li></ol></section>"
+        "<section><h2>Further questions</h2><p>Are all production Dockerfiles, Kubernetes manifests, Helm charts, "
+        "Terraform modules, and Compose files included in the selected pre-build scope?</p></section>"
+    )
+    return document(
+        "Pre-build Code and Configuration Security Report",
+        "SonarQube source analysis, Trivy misconfiguration evidence, and deterministic build policy",
+        body,
+    )
+
+
 def image_findings(triage: dict[str, Any]) -> list[dict[str, Any]]:
     findings = triage.get("findings")
     if not isinstance(findings, list):
@@ -354,6 +495,20 @@ def write_config_report() -> None:
     )
 
 
+def write_prebuild_report() -> None:
+    sonar = load_json(Path("reports/ci-sonar.json"))
+    config = load_json(Path("reports/ci-config-trivy.json"))
+    policy = load_json(Path("reports/ci-config-policy-decision.json"))
+    rendered = render_prebuild_report(sonar, config, policy)
+    with open("reports/ci-prebuild-security-report.html", "w", encoding="utf-8") as output:
+        output.write(rendered)
+    print_pdf(
+        Path("reports/ci-prebuild-security-report.html"),
+        Path("reports/ci-prebuild-security-report.pdf"),
+        "Pre-build Code and Configuration Security Report",
+    )
+
+
 def write_image_report() -> None:
     triage = load_json(Path("reports/ci-triage.json"))
     rendered = render_image_report(triage)
@@ -368,11 +523,13 @@ def write_image_report() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("report_type", choices=("configuration", "image"))
+    parser.add_argument("report_type", choices=("configuration", "prebuild", "image"))
     args = parser.parse_args()
     try:
         if args.report_type == "configuration":
             write_config_report()
+        elif args.report_type == "prebuild":
+            write_prebuild_report()
         else:
             write_image_report()
     except ValueError as exc:
