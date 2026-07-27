@@ -157,9 +157,11 @@ def render_markdown(result: dict[str, Any]) -> str:
     lines = [
         "# ADK container security agent review",
         "",
+        "**Overall release decision:** `not_evaluated`  ",
         f"**Agent status:** `{markdown(result['agent_status'])}`  ",
-        f"**Deterministic policy decision:** `{markdown(result['policy_decision'])}`",
+        f"**Scoped container policy decision:** `{markdown(result['policy_decision'])}`",
         "",
+        "> The overall release decision is computed only in the consolidated report after all required gates complete. ",
         "> This Vertex AI/ADK review is advisory. It cannot approve, reject, "
         "waive, or override the deterministic release policy. "
         "`policy_decision: not_evaluated` is not approval.",

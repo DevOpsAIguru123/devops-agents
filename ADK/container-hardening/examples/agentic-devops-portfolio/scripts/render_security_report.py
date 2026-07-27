@@ -43,6 +43,9 @@ th { background:#edf1f8; font-size:12px; } tr { break-inside:avoid; }
 .sev-critical,.sev-high { color:var(--bad); font-weight:700; }
 .sev-medium { color:var(--warn); font-weight:700; } .sev-low { color:var(--ok); font-weight:700; }
 .notice { border-left:4px solid var(--brand); padding:10px 14px; background:#f3f6ff; }
+.release-banner { margin:24px 0; border:2px solid var(--line); border-radius:12px; padding:18px; }
+.release-banner .label { color:var(--muted); font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+.release-banner .value { display:block; margin:4px 0; font-size:30px; font-weight:800; }
 code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; }
 ol,ul { padding-left:22px; }
 @page { size:A4 landscape; margin:12mm; }
@@ -86,6 +89,16 @@ def metric_cards(cards: list[tuple[str, Any, str]]) -> str:
         f'<span class="value {text(style)}">{text(value)}</span></div>'
         for label, value, style in cards
     ) + "</div>"
+
+
+def release_banner(decision: str, detail: str) -> str:
+    normalized = decision.lower()
+    style = normalized if normalized in {"approved", "blocked"} else "review"
+    return (
+        f'<section class="release-banner"><div class="label">Overall release decision</div>'
+        f'<span class="value {text(style)}">{text(normalized)}</span>'
+        f"<div>{text(detail)}</div></section>"
+    )
 
 
 def document(title: str, subtitle: str, body: str) -> str:
@@ -171,7 +184,11 @@ def render_config_report(report: dict[str, Any], policy: dict[str, Any]) -> str:
     )
     table = paged_tables(header, rows, 5)
     body = (
-        "<section><h2>Technical summary</h2>"
+        release_banner(
+            "not_evaluated",
+            "The image scan, consolidated deterministic decision, and protected approval have not run at this stage.",
+        )
+        + "<section><h2>Technical summary</h2>"
         f"<p>The deterministic pre-build configuration decision is "
         f'<strong class="decision {text(decision)}">{text(decision)}</strong>. '
         "HIGH and CRITICAL failures prevent the Docker build in the production workflow.</p>"
@@ -302,7 +319,11 @@ def render_prebuild_report(
         else "blocked"
     )
     body = (
-        "<section><h2>Technical summary</h2>"
+        release_banner(
+            "not_evaluated",
+            "This pre-build report cannot authorize a release; image scanning and consolidated evaluation must still complete.",
+        )
+        + "<section><h2>Technical summary</h2>"
         f"<p>The combined pre-build status is <strong class='decision {text(prebuild_status)}'>{text(prebuild_status)}</strong>. "
         f"SonarQube reported a quality-gate status of <strong>{text(sonar_status)}</strong>, while the Trivy configuration "
         f"policy decision is <strong>{text(config_decision)}</strong>. On a protected release branch, either failed required "
@@ -385,7 +406,11 @@ def render_image_report(triage: dict[str, Any]) -> str:
     )
     table = paged_tables(header, rows, 10)
     body = (
-        "<section><h2>Technical summary</h2>"
+        release_banner(
+            "not_evaluated",
+            "This scoped image decision is not overall release approval; the consolidated report evaluates every required gate.",
+        )
+        + "<section><h2>Container scan decision</h2>"
         f"<p>The deterministic container release decision is <strong class='decision {text(decision)}'>{text(decision)}</strong>. "
         "This report is generated only from sanitized triage data; detected secret values are intentionally excluded.</p>"
         + metric_cards(
@@ -496,7 +521,11 @@ def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -
     limitations = string_list(agent_review.get("limitations"))
 
     body = (
-        "<section><h2>Technical summary</h2>"
+        release_banner(
+            release_status,
+            "This is the combined deterministic result from every required scanner gate; protected human approval is still required before publishing.",
+        )
+        + "<section><h2>Decision basis</h2>"
         f"<p>The deterministic release status is <strong class='decision {text(release_status)}'>{text(release_status)}</strong>. "
         f"SonarQube reported <strong>{text(sonar_status)}</strong> and the Trivy release policy reported "
         f"<strong>{text(policy_decision)}</strong>. The ADK agent status is <strong>{text(agent_status)}</strong>; its output "
