@@ -63,8 +63,10 @@ uses four isolated jobs:
 3. A separate Vertex AI/ADK advisory stage that consumes the bounded,
    secret-safe deterministic triage data and proposes prioritized remediation,
    compatibility checks, attack-path hypotheses, and verification steps.
-4. Docker Hub authentication and push, which can run only after the Sonar and
-   deterministic container-security jobs succeed and the machine-readable
+4. A required-reviewer approval gate on the protected
+   `container-production` GitHub Environment, followed by Docker Hub
+   authentication and push. The publish job is reachable only after the Sonar
+   and deterministic container-security jobs succeed and the machine-readable
    decision says `publish_allowed: true`.
 
 The generated `ci-triage.md` is the team-facing report; reviewers can read it
@@ -118,7 +120,8 @@ values. A safe, commit-ready template is available at
 `.github/container-release.settings.example`.
 
 Pull requests run every analysis and gate but never publish. Pushes to `main`
-publish the hardened `Dockerfile` only after approval. To prove blocking, run
+publish the hardened `Dockerfile` only after deterministic authorization and a
+reviewer approves the `container-production` deployment. To prove blocking, run
 the workflow manually with `Dockerfile.vulnerable`; the policy step fails,
 scan reports are uploaded for review, no release bundle is produced, and the
 publish job is skipped even if `publish` was requested.
