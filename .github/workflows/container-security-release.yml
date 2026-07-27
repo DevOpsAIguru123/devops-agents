@@ -118,16 +118,15 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-  container-security:
-    name: Build, scan, and authorize
-    needs: sonarqube
+  configuration-security:
+    name: Pre-build configuration scan
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Prepare reports and selected configuration
+      - name: Prepare the exact configuration selected for release
         working-directory: ${{ env.APP_DIR }}
         run: |
           mkdir -p reports .ci-config-scan
@@ -135,6 +134,81 @@ jobs:
           if [ "$SELECTED_DOCKERFILE" = "Dockerfile.vulnerable" ]; then
             cp deployment.vulnerable.yaml .ci-config-scan/deployment.yaml
           fi
+
+      - name: Scan configuration before building
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: ${{ env.APP_DIR }}/.ci-config-scan
+          scanners: misconfig
+          format: json
+          output: ${{ env.APP_DIR }}/reports/ci-config-trivy.json
+          exit-code: "0"
+          version: v0.72.0
+
+      - name: Apply deterministic pre-build configuration policy
+        id: config-policy
+        continue-on-error: true
+        working-directory: ${{ env.APP_DIR }}
+        run: python3 scripts/evaluate_config_policy.py
+
+      - name: Publish the pre-build decision
+        if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-config-policy.md') != ''
+        run: cat ${{ env.APP_DIR }}/reports/ci-config-policy.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload configuration evidence even when policy blocks
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: configuration-security-reports-${{ github.run_id }}
+          path: |
+            ${{ env.APP_DIR }}/reports/ci-config-trivy.json
+            ${{ env.APP_DIR }}/reports/ci-config-policy-decision.json
+            ${{ env.APP_DIR }}/reports/ci-config-policy.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce configuration policy before build
+        if: always()
+        env:
+          CONFIG_POLICY_OUTCOME: ${{ steps.config-policy.outcome }}
+        run: |
+          test "$CONFIG_POLICY_OUTCOME" = "success" || {
+            echo "Pre-build configuration policy blocked this candidate"
+            exit 1
+          }
+          test -s "${{ env.APP_DIR }}/reports/ci-config-policy-decision.json"
+          test -s "${{ env.APP_DIR }}/reports/ci-config-policy.md"
+
+  container-security:
+    name: Build, scan, and authorize
+    needs:
+      - sonarqube
+      - configuration-security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare reports
+        working-directory: ${{ env.APP_DIR }}
+        run: mkdir -p reports
+
+      - name: Download approved pre-build configuration evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: configuration-security-reports-${{ github.run_id }}
+          path: ${{ env.APP_DIR }}/reports
+
+      - name: Verify configuration authorization
+        working-directory: ${{ env.APP_DIR }}
+        run: >-
+          python3 -c
+          'import json; from pathlib import Path;
+          d=json.loads(Path("reports/ci-config-policy-decision.json").read_text());
+          assert d.get("policy_decision") == "approved" and d.get("build_allowed") is True,
+          "pre-build configuration policy did not authorize the build"'
 
       - name: Build local candidate without publishing
         working-directory: ${{ env.APP_DIR }}
@@ -154,18 +228,6 @@ jobs:
           output: ${{ env.APP_DIR }}/reports/ci-image-trivy.json
           exit-code: "0"
           version: v0.72.0
-
-      - name: Generate separate Trivy configuration report
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: config
-          scan-ref: ${{ env.APP_DIR }}/.ci-config-scan
-          scanners: misconfig
-          format: json
-          output: ${{ env.APP_DIR }}/reports/ci-config-trivy.json
-          exit-code: "0"
-          version: v0.72.0
-          skip-setup-trivy: true
 
       - name: Apply deterministic release policy
         id: release-policy
@@ -207,6 +269,8 @@ jobs:
           path: |
             ${{ env.APP_DIR }}/reports/ci-image-trivy.json
             ${{ env.APP_DIR }}/reports/ci-config-trivy.json
+            ${{ env.APP_DIR }}/reports/ci-config-policy-decision.json
+            ${{ env.APP_DIR }}/reports/ci-config-policy.md
             ${{ env.APP_DIR }}/reports/ci-policy-decision.json
             ${{ env.APP_DIR }}/reports/ci-triage.json
             ${{ env.APP_DIR }}/reports/ci-triage.md
@@ -247,6 +311,7 @@ jobs:
     name: Unified code and container report
     needs:
       - sonarqube
+      - configuration-security
       - container-security
     if: >-
       always() &&
@@ -356,12 +421,14 @@ jobs:
     name: Release approval gate
     needs:
       - sonarqube
+      - configuration-security
       - container-security
       - unified-report
       - agent-triage
     if: >-
       always() &&
       needs.sonarqube.result == 'success' &&
+      needs.configuration-security.result == 'success' &&
       needs.container-security.result == 'success' &&
       needs.unified-report.result == 'success' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||

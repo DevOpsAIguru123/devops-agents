@@ -54,8 +54,12 @@ blocked result makes the push step unreachable.
 The repository workflow `.github/workflows/container-security-release.yml`
 uses isolated jobs:
 
-1. SonarQube source analysis and Quality Gate enforcement.
-2. Local image build, separate Trivy image/configuration scans, and the
+1. SonarQube source analysis and Quality Gate enforcement runs in parallel
+   with a dedicated Trivy configuration scan of the exact Dockerfile and
+   deployment configuration selected for release.
+2. The deterministic pre-build configuration policy must pass before the
+   Docker build is reachable. The approved configuration evidence is then
+   reused with the Trivy image vulnerability/secret scan by the final
    deterministic release-policy gate. Every Trivy occurrence is also ranked
    into an advisory triage queue, rendered in the Actions job summary, retained
    as Markdown/JSON/SARIF evidence, and uploaded to GitHub Code Scanning when
