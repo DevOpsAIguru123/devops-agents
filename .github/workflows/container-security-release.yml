@@ -34,6 +34,11 @@ on:
         required: true
         default: false
         type: boolean
+      approval_test:
+        description: Exercise the approval gate without publishing (feature branch only)
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -293,7 +298,10 @@ jobs:
       needs.container-security.result == 'success' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main' && inputs.publish))
+      github.ref == 'refs/heads/main' && inputs.publish) ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/codex/gemini-api-secret-agent' &&
+      inputs.approval_test && !inputs.publish))
     environment:
       name: container-production
     runs-on: ubuntu-24.04
@@ -306,7 +314,12 @@ jobs:
     name: Publish authorized image
     needs:
       - release-approval
-    if: always() && needs.release-approval.result == 'success'
+    if: >-
+      always() &&
+      needs.release-approval.result == 'success' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' && inputs.publish))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

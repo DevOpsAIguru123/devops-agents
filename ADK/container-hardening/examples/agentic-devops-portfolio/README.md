@@ -125,3 +125,8 @@ reviewer approves the `container-production` deployment. To prove blocking, run
 the workflow manually with `Dockerfile.vulnerable`; the policy step fails,
 scan reports are uploaded for review, no release bundle is produced, and the
 publish job is skipped even if `publish` was requested.
+
+To exercise the protected-environment approval UI without publishing, dispatch
+the workflow from `codex/gemini-api-secret-agent` with `approval_test: true`
+and `publish: false`. The release-approval job waits for the configured
+reviewer, records the approval, and the Docker Hub publish job remains skipped.
