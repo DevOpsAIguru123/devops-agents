@@ -20,7 +20,6 @@ sonar_token="$(read_setting SONAR_TOKEN)"
 dockerhub_username="$(read_setting DOCKERHUB_USERNAME)"
 dockerhub_repository="$(read_setting DOCKERHUB_REPOSITORY)"
 dockerhub_token="$(read_setting DOCKERHUB_TOKEN)"
-google_api_key="$(read_setting GOOGLE_API_KEY)"
 
 require_real_value() {
   local name="$1"
@@ -37,7 +36,6 @@ require_real_value SONAR_TOKEN "$sonar_token"
 require_real_value DOCKERHUB_USERNAME "$dockerhub_username"
 require_real_value DOCKERHUB_REPOSITORY "$dockerhub_repository"
 require_real_value DOCKERHUB_TOKEN "$dockerhub_token"
-require_real_value GOOGLE_API_KEY "$google_api_key"
 
 gh auth status --hostname github.com >/dev/null
 
@@ -51,7 +49,6 @@ printf '%s' "$dockerhub_token" | gh secret set DOCKERHUB_TOKEN --repo "$reposito
 printf '%s' "$sonar_host_url" | gh secret set SONAR_HOST_URL --repo "$repository"
 printf '%s' "$dockerhub_username" | gh secret set DOCKERHUB_USERNAME --repo "$repository"
 printf '%s' "$dockerhub_repository" | gh secret set DOCKERHUB_REPOSITORY --repo "$repository"
-printf '%s' "$google_api_key" | gh secret set GOOGLE_API_KEY --repo "$repository"
 
 echo "Configured GitHub Actions settings for $repository:"
-echo "- secrets: SONAR_TOKEN, SONAR_HOST_URL, SONAR_ORGANIZATION, DOCKERHUB_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_REPOSITORY, GOOGLE_API_KEY"
+echo "- secrets: SONAR_TOKEN, SONAR_HOST_URL, SONAR_ORGANIZATION, DOCKERHUB_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_REPOSITORY"

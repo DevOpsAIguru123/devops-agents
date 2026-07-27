@@ -160,7 +160,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"**Agent status:** `{markdown(result['agent_status'])}`  ",
         f"**Deterministic policy decision:** `{markdown(result['policy_decision'])}`",
         "",
-        "> This Gemini/ADK review is advisory. It cannot approve, reject, "
+        "> This Vertex AI/ADK review is advisory. It cannot approve, reject, "
         "waive, or override the deterministic release policy. "
         "`policy_decision: not_evaluated` is not approval.",
         "",

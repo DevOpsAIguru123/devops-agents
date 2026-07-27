@@ -224,6 +224,7 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
+      id-token: write
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -246,13 +247,19 @@ jobs:
         working-directory: ADK/container-hardening
         run: uv sync --frozen --no-dev
 
-      - name: Run Gemini ADK advisory agent
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/gemini-api-secret-agent')
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Run Vertex AI ADK advisory agent
         working-directory: ADK/container-hardening
         env:
-          GOOGLE_GENAI_USE_VERTEXAI: "false"
-          # PR runs remain credential-free. The named feature branch may use
-          # the key only during an explicitly requested manual validation run.
-          GOOGLE_API_KEY: ${{ (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/gemini-api-secret-agent')) && secrets.GOOGLE_API_KEY || '' }}
+          GOOGLE_GENAI_USE_VERTEXAI: "true"
+          GOOGLE_CLOUD_PROJECT: ${{ (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/gemini-api-secret-agent')) && secrets.GOOGLE_CLOUD_PROJECT || '' }}
+          GOOGLE_CLOUD_LOCATION: "global"
         run: >-
           uv run --no-sync python scripts/run_ci_agent.py
           --triage-report .ci-agent-input/ci-triage.json
