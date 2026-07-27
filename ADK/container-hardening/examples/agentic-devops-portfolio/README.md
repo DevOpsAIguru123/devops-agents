@@ -84,7 +84,9 @@ model response is recorded as `agent_status: unavailable` and cannot approve,
 block, or change a release decision. Pull-request code receives no Gemini API
 key; it produces the deterministic report plus an explicit unavailable agent
 report. Trusted `main` runs use the `GOOGLE_API_KEY` repository secret to run
-the real model-backed stage through the Gemini Developer API.
+the real model-backed stage through the Gemini Developer API. The dedicated
+`codex/gemini-api-secret-agent` branch can also receive the key during an
+explicitly dispatched, non-publishing validation run.
 
 Configure these GitHub repository settings before running it:
 

@@ -250,8 +250,9 @@ jobs:
         working-directory: ADK/container-hardening
         env:
           GOOGLE_GENAI_USE_VERTEXAI: "false"
-          # Only trusted main-branch code receives the Gemini API key.
-          GOOGLE_API_KEY: ${{ github.ref == 'refs/heads/main' && secrets.GOOGLE_API_KEY || '' }}
+          # PR runs remain credential-free. The named feature branch may use
+          # the key only during an explicitly requested manual validation run.
+          GOOGLE_API_KEY: ${{ (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/gemini-api-secret-agent')) && secrets.GOOGLE_API_KEY || '' }}
         run: >-
           uv run --no-sync python scripts/run_ci_agent.py
           --triage-report .ci-agent-input/ci-triage.json
