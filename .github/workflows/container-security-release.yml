@@ -152,6 +152,11 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: python3 scripts/evaluate_config_policy.py
 
+      - name: Generate misconfiguration HTML and PDF reports
+        if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-config-policy-decision.json') != ''
+        working-directory: ${{ env.APP_DIR }}
+        run: python3 scripts/render_security_report.py configuration
+
       - name: Publish the pre-build decision
         if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-config-policy.md') != ''
         run: cat ${{ env.APP_DIR }}/reports/ci-config-policy.md >> "$GITHUB_STEP_SUMMARY"
@@ -165,6 +170,8 @@ jobs:
             ${{ env.APP_DIR }}/reports/ci-config-trivy.json
             ${{ env.APP_DIR }}/reports/ci-config-policy-decision.json
             ${{ env.APP_DIR }}/reports/ci-config-policy.md
+            ${{ env.APP_DIR }}/reports/ci-misconfiguration-report.html
+            ${{ env.APP_DIR }}/reports/ci-misconfiguration-report.pdf
           if-no-files-found: warn
           retention-days: 30
 
@@ -179,6 +186,8 @@ jobs:
           }
           test -s "${{ env.APP_DIR }}/reports/ci-config-policy-decision.json"
           test -s "${{ env.APP_DIR }}/reports/ci-config-policy.md"
+          test -s "${{ env.APP_DIR }}/reports/ci-misconfiguration-report.html"
+          test -s "${{ env.APP_DIR }}/reports/ci-misconfiguration-report.pdf"
 
   container-security:
     name: Build, scan, and authorize
@@ -253,6 +262,11 @@ jobs:
             --sarif-output reports/ci-trivy.sarif
           cat reports/ci-triage.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Generate image-scan HTML and PDF reports
+        if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-triage.json') != ''
+        working-directory: ${{ env.APP_DIR }}
+        run: python3 scripts/render_security_report.py image
+
       - name: Send Trivy findings to GitHub Code Scanning
         if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-trivy.sarif') != ''
         continue-on-error: true
@@ -275,6 +289,8 @@ jobs:
             ${{ env.APP_DIR }}/reports/ci-triage.json
             ${{ env.APP_DIR }}/reports/ci-triage.md
             ${{ env.APP_DIR }}/reports/ci-trivy.sarif
+            ${{ env.APP_DIR }}/reports/ci-image-security-report.html
+            ${{ env.APP_DIR }}/reports/ci-image-security-report.pdf
           if-no-files-found: warn
           retention-days: 30
 
@@ -291,6 +307,8 @@ jobs:
           test -s reports/ci-triage.json
           test -s reports/ci-triage.md
           test -s reports/ci-trivy.sarif
+          test -s reports/ci-image-security-report.html
+          test -s reports/ci-image-security-report.pdf
 
       - name: Package the authorized local image
         working-directory: ${{ env.APP_DIR }}

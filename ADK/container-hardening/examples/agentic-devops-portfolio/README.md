@@ -85,6 +85,19 @@ remain available as scanner-specific evidence and GitHub Security-tab input.
 Scanner and agent triage are advisory: `policy_decision: not_evaluated` is
 never approval. Only `ci-policy-decision.json` can authorize publishing.
 
+Each scan stage also produces printable, sanitized reports:
+
+- `ci-misconfiguration-report.html` and `ci-misconfiguration-report.pdf`
+  describe the pre-build Dockerfile/deployment findings and configuration
+  policy outcome.
+- `ci-image-security-report.html` and `ci-image-security-report.pdf` describe
+  the normalized image vulnerability, secret, and configuration findings.
+  They are rendered from `ci-triage.json`, so raw secret match values are never
+  included.
+
+The PDFs are generated from the corresponding self-contained HTML using
+headless Chrome and verified for non-empty, searchable text before upload.
+
 If a release is blocked, reporting and evidence upload still run before the job
 fails. This gives developers and security reviewers the explanation needed to
 remediate the candidate without weakening the fail-closed release gate.
