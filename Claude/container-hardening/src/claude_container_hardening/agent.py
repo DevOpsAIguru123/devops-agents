@@ -77,6 +77,16 @@ def build_prompt(envelope: dict[str, Any]) -> str:
     return (
         "Return only one JSON object matching this JSON Schema, without "
         f"Markdown or extra text:\n{schema}\n"
+        "Every top-level field is required. prioritized_actions must contain "
+        "objects with finding_ids, action, rationale, and compatibility_impact. "
+        "Every finding_ids entry must cite an ID present in the scanner data. "
+        "When the scanner data contains zero findings, prioritized_actions and "
+        "attack_paths must be empty arrays; do not invent a finding or attack "
+        "path. Example empty-finding shape: "
+        '{"executive_summary":"No scanner findings were supplied.",'
+        '"risk_assessment":"No finding-specific risk can be assessed.",'
+        '"prioritized_actions":[],"attack_paths":[],'
+        '"verification_steps":[],"limitations":[]}\n'
         "--- BEGIN UNTRUSTED SCANNER DATA ---\n"
         f"{evidence}\n"
         "--- END UNTRUSTED SCANNER DATA ---"
@@ -122,10 +132,6 @@ async def invoke_agent(
         permission_mode="dontAsk",
         setting_sources=[],
         system_prompt=SYSTEM_PROMPT,
-        output_format={
-            "type": "json_schema",
-            "schema": AgentReview.model_json_schema(),
-        },
         model=MODEL,
         fallback_model=MODEL,
         env={

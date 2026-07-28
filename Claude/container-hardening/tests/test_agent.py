@@ -86,10 +86,7 @@ def test_invocation_has_no_tools_and_validates_ids() -> None:
     assert options.mcp_servers == {}
     assert options.setting_sources == []
     assert options.max_turns == 1
-    assert options.output_format == {
-        "type": "json_schema",
-        "schema": AgentReview.model_json_schema(),
-    }
+    assert options.output_format is None
     assert options.model == MODEL
     assert options.fallback_model == MODEL
     assert options.env == {
@@ -148,6 +145,16 @@ def test_free_form_json_remains_a_validated_compatibility_fallback() -> None:
     result = asyncio.run(invoke_agent(envelope, query_fn=fake_query))
     assert result.review.executive_summary == review().executive_summary
     assert result.actual_models == [MODEL]
+
+
+def test_zero_finding_prompt_forbids_invented_actions_and_paths() -> None:
+    empty = triage()
+    empty["summary"] = {"total_findings": 0}
+    empty["findings"] = []
+    prompt = build_prompt(build_envelope(empty, 1))
+    assert "zero findings" in prompt
+    assert "prioritized_actions and attack_paths must be empty arrays" in prompt
+    assert '"prioritized_actions":[]' in prompt
 
 
 def test_invocation_rejects_an_unexpected_model() -> None:
