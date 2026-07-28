@@ -16,8 +16,12 @@ single turn, and returns a locally validated advisory. It cannot approve,
 reject, waive, publish, or change a release decision. In particular,
 `policy_decision: not_evaluated` is not approval.
 
-The implementation pins `claude-sonnet-5`; the requested model ID is recorded
-in every JSON and Markdown advisory for reproducibility.
+The implementation pins `claude-sonnet-5`. Every JSON and Markdown advisory
+records both the requested model and the model usage reported by Anthropic. The
+advisory fails safely if model usage is missing or reports a non-Sonnet-5 model.
+Anthropic Console billing charts aggregate usage across the selected workspace
+and date range, so Opus charges can come from unrelated Claude Code or API
+sessions that use the same Anthropic account.
 
 ## Five-minute test
 

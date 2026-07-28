@@ -184,7 +184,15 @@ jobs:
           from pathlib import Path
 
           result = json.loads(Path("reports/ci-claude-image-review.json").read_text())
-          assert result.get("model") == "claude-sonnet-5"
+          assert result.get("requested_model") == "claude-sonnet-5"
+          actual_models = result.get("actual_models") or []
+          assert actual_models
+          assert all(
+              model == "claude-sonnet-5"
+              or model.startswith("claude-sonnet-5-")
+              for model in actual_models
+          )
+          assert result.get("model_verified") is True
           assert result.get("agent_status") == "completed", (
               "Claude advisory was unavailable: "
               f"{result.get('failure_category', 'unknown')}"
@@ -238,7 +246,12 @@ jobs:
           agent = (
               json.loads(agent_path.read_text())
               if agent_path.is_file()
-              else {"agent_status": "unavailable", "model": "claude-sonnet-5"}
+              else {
+                  "agent_status": "unavailable",
+                  "requested_model": "claude-sonnet-5",
+                  "actual_models": [],
+                  "model_verified": False,
+              }
           )
           decision = policy.get("policy_decision", "not_evaluated")
           lines = [
@@ -246,7 +259,11 @@ jobs:
               "",
               f"**Deterministic image decision:** `{decision}`  ",
               f"**Claude status:** `{agent.get('agent_status', 'unavailable')}`  ",
-              f"**Model:** `{agent.get('model', 'claude-sonnet-5')}`",
+              f"**Requested model:** `{agent.get('requested_model', 'claude-sonnet-5')}`  ",
+              "**Anthropic-reported model(s):** `"
+              + ", ".join(agent.get("actual_models") or ["unavailable"])
+              + "`  ",
+              f"**Model verified:** `{str(agent.get('model_verified', False)).lower()}`",
               "",
               "> Claude is advisory only. It cannot approve, reject, waive, or publish an image.",
               "> `policy_decision: not_evaluated` is not approval.",

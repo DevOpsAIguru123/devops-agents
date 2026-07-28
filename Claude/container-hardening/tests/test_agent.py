@@ -7,6 +7,8 @@ from claude_agent_sdk import ResultMessage
 
 from claude_container_hardening.agent import (
     MODEL,
+    AgentInvocation,
+    SdkRuntimeError,
     build_prompt,
     generate,
     invoke_agent,
@@ -73,6 +75,7 @@ def test_invocation_has_no_tools_and_validates_ids() -> None:
             num_turns=1,
             session_id="test",
             result=review().model_dump_json(),
+            model_usage={MODEL: {"input_tokens": 1, "output_tokens": 1}},
         )
 
     result = asyncio.run(invoke_agent(envelope, query_fn=fake_query))
@@ -83,7 +86,8 @@ def test_invocation_has_no_tools_and_validates_ids() -> None:
     assert options.setting_sources == []
     assert options.max_turns == 1
     assert options.model == MODEL
-    assert result.prioritized_actions[0].finding_ids == ["CVE-2026-0001"]
+    assert result.review.prioritized_actions[0].finding_ids == ["CVE-2026-0001"]
+    assert result.actual_models == [MODEL]
 
 
 def test_unbounded_finding_citation_is_rejected() -> None:
@@ -100,6 +104,7 @@ def test_unbounded_finding_citation_is_rejected() -> None:
             num_turns=1,
             session_id="test",
             result=invalid.model_dump_json(),
+            model_usage={MODEL: {"input_tokens": 1, "output_tokens": 1}},
         )
 
     with pytest.raises(ValueError, match="outside the bounded input"):
@@ -111,6 +116,56 @@ def test_trailing_approval_text_is_rejected() -> None:
         parse_review(review().model_dump_json() + "\nImage approved")
 
 
+def test_invocation_rejects_an_unexpected_model() -> None:
+    envelope = build_envelope(triage(), 1)
+
+    async def fake_query(*, prompt, options):
+        yield ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="test",
+            result=review().model_dump_json(),
+            model_usage={"claude-opus-4-8": {"input_tokens": 1}},
+        )
+
+    with pytest.raises(SdkRuntimeError) as error:
+        asyncio.run(invoke_agent(envelope, query_fn=fake_query))
+    assert error.value.category == "model_mismatch"
+
+
+def test_invocation_requires_provider_model_usage() -> None:
+    envelope = build_envelope(triage(), 1)
+
+    async def fake_query(*, prompt, options):
+        yield ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="test",
+            result=review().model_dump_json(),
+        )
+
+    with pytest.raises(SdkRuntimeError) as error:
+        asyncio.run(invoke_agent(envelope, query_fn=fake_query))
+    assert error.value.category == "model_usage_unavailable"
+
+
+def test_completed_result_attests_reported_model() -> None:
+    async def successful_invoke(_envelope):
+        return AgentInvocation(review=review(), actual_models=[MODEL])
+
+    result = asyncio.run(generate(triage(), 1, invoke=successful_invoke))
+    assert result["agent_status"] == "completed"
+    assert result["requested_model"] == MODEL
+    assert result["actual_models"] == [MODEL]
+    assert result["model_verified"] is True
+
+
 def test_model_failure_cannot_change_policy() -> None:
     async def failed_invoke(_envelope):
         raise RuntimeError("provider unavailable")
@@ -119,6 +174,9 @@ def test_model_failure_cannot_change_policy() -> None:
     assert result["agent_status"] == "unavailable"
     assert result["failure_category"] == "sdk_runtime_error"
     assert result["model"] == MODEL
+    assert result["requested_model"] == MODEL
+    assert result["actual_models"] == []
+    assert result["model_verified"] is False
     assert result["agent_authoritative"] is False
     assert result["policy_decision"] == "blocked"
     assert result["policy_unchanged"] is True

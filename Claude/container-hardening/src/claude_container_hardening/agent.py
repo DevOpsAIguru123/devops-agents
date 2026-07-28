@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
@@ -13,6 +14,14 @@ from .models import AgentReview
 from .triage import build_envelope, validate_finding_ids
 
 MODEL = "claude-sonnet-5"
+
+
+@dataclass(frozen=True)
+class AgentInvocation:
+    """Validated review plus the models reported by Anthropic."""
+
+    review: AgentReview
+    actual_models: list[str]
 
 
 class SdkRuntimeError(RuntimeError):
@@ -80,7 +89,7 @@ async def invoke_agent(
     envelope: dict[str, Any],
     *,
     query_fn: Callable[..., AsyncIterator[Any]] = query,
-) -> AgentReview:
+) -> AgentInvocation:
     """Call Claude with its complete tool surface disabled."""
     provider_diagnostics: list[str] = []
     options = ClaudeAgentOptions(
@@ -127,7 +136,16 @@ async def invoke_agent(
         raise SdkRuntimeError(classify_provider_failure(provider_diagnostics))
     if not final.result:
         raise RuntimeError("Claude Agent SDK produced no final text")
-    return validate_finding_ids(parse_review(final.result), envelope)
+    actual_models = sorted(str(model) for model in (final.model_usage or {}))
+    if not actual_models:
+        raise SdkRuntimeError("model_usage_unavailable")
+    if any(
+        model != MODEL and not model.startswith(f"{MODEL}-")
+        for model in actual_models
+    ):
+        raise SdkRuntimeError("model_mismatch")
+    review = validate_finding_ids(parse_review(final.result), envelope)
+    return AgentInvocation(review=review, actual_models=actual_models)
 
 
 def failure_category(exc: Exception) -> str:
@@ -156,6 +174,9 @@ async def generate(
         "agent_display_name": "Claude Agent SDK",
         "agent_provider": "Anthropic",
         "model": MODEL,
+        "requested_model": MODEL,
+        "actual_models": [],
+        "model_verified": False,
         "agent_status": "unavailable",
         "agent_authoritative": False,
         "policy_decision": envelope["policy_decision"],
@@ -169,10 +190,12 @@ async def generate(
         "failure_category": None,
     }
     try:
-        review = await invoke(envelope)
+        invocation = await invoke(envelope)
     except Exception as exc:
         result["failure_category"] = failure_category(exc)
         return result
     result["agent_status"] = "completed"
-    result["review"] = review.model_dump(mode="json")
+    result["actual_models"] = invocation.actual_models
+    result["model_verified"] = True
+    result["review"] = invocation.review.model_dump(mode="json")
     return result
