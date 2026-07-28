@@ -152,10 +152,6 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: python3 scripts/evaluate_config_policy.py
 
-      - name: Publish the pre-build decision
-        if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-config-policy.md') != ''
-        run: cat ${{ env.APP_DIR }}/reports/ci-config-policy.md >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload configuration evidence even when policy blocks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -208,7 +204,8 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: python3 scripts/render_security_report.py prebuild
 
-      - name: Publish pre-build report status
+      - name: Publish fallback summary when configuration blocks the pipeline
+        if: always() && needs.configuration-security.result != 'success'
         working-directory: ${{ env.APP_DIR }}
         run: |
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -216,10 +213,16 @@ jobs:
           from pathlib import Path
           sonar = json.loads(Path("reports/ci-sonar.json").read_text())
           policy = json.loads(Path("reports/ci-config-policy-decision.json").read_text())
-          print("# Pre-build code and configuration report")
+          print("# Overall release decision: BLOCKED")
+          print()
+          print("The pipeline stopped before building an image because a required pre-build gate failed.")
+          print()
           print(f"- Sonar quality gate: **{sonar.get('quality_gate', {}).get('status', 'UNKNOWN')}**")
           print(f"- Configuration policy: **{policy.get('policy_decision', 'not_evaluated')}**")
-          print("- HTML and PDF reports are attached to this run.")
+          print("- Container image scan: **not_run**")
+          print("- Protected approval and publishing: **not_run**")
+          print()
+          print("The pre-build HTML and PDF reports are attached to this run.")
           PY
 
       - name: Upload pre-build report even when the build is blocked
@@ -304,7 +307,6 @@ jobs:
             --json-output reports/ci-triage.json \
             --markdown-output reports/ci-triage.md \
             --sarif-output reports/ci-trivy.sarif
-          cat reports/ci-triage.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate image-scan HTML and PDF reports
         if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-triage.json') != ''
@@ -379,7 +381,7 @@ jobs:
           compression-level: 0
 
   unified-report:
-    name: Consolidated release security report
+    name: Overall release
     needs:
       - sonarqube
       - configuration-security
@@ -415,7 +417,7 @@ jobs:
           name: agent-advisory-evidence-${{ github.run_id }}
           path: ${{ env.APP_DIR }}/reports
 
-      - name: Aggregate code and container findings
+      - name: Generate overall summary and consolidated report
         working-directory: ${{ env.APP_DIR }}
         run: |
           python3 scripts/aggregate_security_reports.py \
@@ -484,10 +486,6 @@ jobs:
           --triage-report .ci-agent-input/ci-triage.json
           --json-output reports/ci-agent-review.json
           --markdown-output reports/ci-agent-review.md
-
-      - name: Publish agent review in the run summary
-        if: always() && hashFiles('ADK/container-hardening/reports/ci-agent-review.md') != ''
-        run: cat ADK/container-hardening/reports/ci-agent-review.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload agent advisory report
         if: always()
