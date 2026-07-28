@@ -327,7 +327,7 @@ def render_prebuild_report(
         f"<p>The combined pre-build status is <strong class='decision {text(prebuild_status)}'>{text(prebuild_status)}</strong>. "
         f"SonarQube reported a quality-gate status of <strong>{text(sonar_status)}</strong>, while the Trivy configuration "
         f"policy decision is <strong>{text(config_decision)}</strong>. On a protected release branch, either failed required "
-        "gate prevents the image build. Diagnostic feature-branch execution does not turn a failed scanner status into approval.</p>"
+        "gate prevents the image build. Non-publishing validation does not turn a failed scanner status into approval.</p>"
         + metric_cards(
             [
                 ("Pre-build status", prebuild_status, prebuild_status),

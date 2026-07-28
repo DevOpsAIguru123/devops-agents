@@ -109,8 +109,9 @@ model response is recorded as `agent_status: unavailable` and cannot approve,
 block, or change a release decision. Pull-request code receives no Google Cloud
 credential; it produces the deterministic report plus an explicit unavailable
 agent report. Trusted `main` runs authenticate to Vertex AI through Workload
-Identity Federation. The dedicated `codex/gemini-api-secret-agent` branch can
-also federate during an explicitly dispatched, non-publishing validation run.
+Identity Federation. Pull requests and feature branches do not receive Google
+Cloud credentials; the advisory is explicitly marked unavailable while
+deterministic scanner and policy evidence remains authoritative.
 
 Configure these GitHub repository settings before running it:
 
@@ -119,6 +120,9 @@ Configure these GitHub repository settings before running it:
 | Secret | `SONAR_TOKEN` | SonarQube project analysis token |
 | Secret | `SONAR_HOST_URL` | SonarQube URL, such as `https://sonar.example.com` |
 | Secret | `SONAR_ORGANIZATION` | SonarQube Cloud organization key |
+| Secret | `WIF_PROVIDER` | Full Google Cloud WIF provider resource name |
+| Secret | `WIF_SERVICE_ACCOUNT` | Least-privilege service account email |
+| Secret | `GOOGLE_CLOUD_PROJECT` | Vertex AI project ID |
 | Secret | `DOCKERHUB_TOKEN` | Docker Hub access token; do not use the account password |
 | Secret | `DOCKERHUB_USERNAME` | Docker Hub namespace |
 | Secret | `DOCKERHUB_REPOSITORY` | Existing public Docker Hub repository name |
@@ -150,12 +154,7 @@ scan reports are uploaded for review, no release bundle is produced, and the
 publish job is skipped even if `publish` was requested.
 
 To exercise the protected-environment approval UI without publishing, dispatch
-the workflow from `codex/gemini-api-secret-agent` with `approval_test: true`
-and `publish: false`. The release-approval job waits for the configured
-reviewer, records the approval, and the Docker Hub publish job remains skipped.
-
-To test the complete publish path from that dedicated feature branch, dispatch
-with `publish: true` and approve the protected environment. A successful run
-pushes only the immutable `feature-<commit-sha>` tag. It never overwrites the
-production `latest` tag; SHA and `latest` publication remain exclusive to
-`main`.
+the workflow from `main` with `approval_test: true` and `publish: false`. The
+release-approval job waits for the configured reviewer, records the approval,
+and the Docker Hub publish job remains skipped. Publishing is restricted to
+`main`; feature branches cannot federate, approve, or push an image.

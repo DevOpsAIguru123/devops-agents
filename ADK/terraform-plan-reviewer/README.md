@@ -1,5 +1,10 @@
 # Terraform Plan Reviewer ADK Agent
 
+> **Portfolio prototype:** model output is advisory and must not be the sole
+> authorization for `terraform apply`. Add deterministic policy, protected
+> approval, prompt-injection controls, and WIF before production use. See
+> [production readiness](../../docs/PRODUCTION-READINESS.md).
+
 Reviews Terraform plan text and returns a structured risk review.
 
 This version uses a Google Cloud account-bound API key with Vertex AI:
@@ -30,12 +35,13 @@ ADK/terraform-plan-reviewer/terraform/gcs-sample
 Terraform Cloud target:
 
 ```text
-organization: devops_vv
-workspace: agents
+organization: REPLACE_WITH_TFC_ORGANIZATION
+workspace: REPLACE_WITH_TFC_WORKSPACE
 ```
 
-The workflow sends the streamed Terraform Cloud plan output to `run_review.py`
-and fails unless the agent returns `safe-to-apply`.
+The workflow sends the Terraform Cloud plan output to `run_review.py` without
+printing the plan or model response to the Actions log. The agent result is
+advisory and cannot authorize `terraform apply`.
 
 Expected output:
 

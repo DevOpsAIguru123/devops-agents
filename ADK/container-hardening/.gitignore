@@ -200,6 +200,8 @@ my_env.tfvars
 .saved_chats
 .env
 .google-agents-cli/
+gha-creds-*.json
+reports/local/
 
 # A2A Inspector
 tools/a2a-inspector/
