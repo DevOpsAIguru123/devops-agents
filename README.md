@@ -158,10 +158,3 @@ Read [SECURITY.md](SECURITY.md) before reporting a vulnerability or using the
 pipeline for a real release. Original project code is available under the
 [MIT License](LICENSE). Google ADK and scaffold-derived files retain their
 upstream terms as described in [third-party notices](THIRD_PARTY_NOTICES.md).
-
-## Share the project
-
-The [LinkedIn showcase guide](docs/LINKEDIN-SHOWCASE.md) contains a five-minute
-demo sequence, recommended screenshots, an architecture explanation, and a
-ready-to-edit post template. It also lists claims to avoid so a portfolio post
-does not imply that AI replaces deterministic security policy or human review.
