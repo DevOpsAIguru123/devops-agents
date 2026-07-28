@@ -5,7 +5,8 @@ Both produce evidence; only the clean path can reach approval and publishing.
 
 ## Successful, non-publishing validation
 
-In **Actions → Container security release → Run workflow**, select:
+In **Actions**, choose either **Container security release** or **Claude
+comprehensive container release**, then select:
 
 ```text
 dockerfile: Dockerfile
@@ -19,7 +20,8 @@ Expected behavior:
 2. The candidate image is built locally on the runner.
 3. Trivy scans the real image for vulnerabilities and embedded secrets.
 4. Deterministic policy authorizes the candidate.
-5. The ADK agent produces advisory triage when WIF is available.
+5. The selected ADK or Claude agent produces non-authoritative advisory triage
+   when its authentication is available.
 6. The overall summary and all three deterministic reports are produced.
 7. Approval and publishing are skipped because `publish` is false.
 

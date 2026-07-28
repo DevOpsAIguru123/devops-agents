@@ -6,7 +6,7 @@
 - Fail-closed configuration and release-policy checks
 - Vulnerability, misconfiguration, and embedded-secret detection with Trivy
 - SonarCloud code analysis
-- Advisory-only ADK triage with bounded scanner input
+- Advisory-only Google ADK or Claude Agent SDK triage with bounded scanner input
 - Protected environment approval before authentication and push
 - Immutable GitHub Action commit pins
 - Sanitized HTML/PDF/JSON/Markdown/SARIF evidence
@@ -31,12 +31,12 @@
 - Replace branch-name demo exceptions in the workflow with organization-owned
   environments and reusable policy configuration.
 - Add integration tests against your registry, SonarCloud organization,
-  protected environments, and Google Cloud IAM configuration.
+  protected environments, and selected model-provider IAM/API configuration.
 
 ## Non-authoritative components
 
-The ADK/Vertex AI stage explains evidence, proposes prioritization, and lists
-verification steps. It is not a security gate. Model unavailability must be
-reported, but it cannot convert a deterministic block into approval or create
-authorization when policy was not evaluated.
-
+The selected Google ADK/Vertex AI or Claude Agent SDK/Sonnet 5 stage explains
+evidence, proposes prioritization, and lists verification steps. It is not a
+security gate. Model unavailability must be reported, but it cannot convert a
+deterministic block into approval or create authorization when policy was not
+evaluated.

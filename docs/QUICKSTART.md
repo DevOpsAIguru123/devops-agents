@@ -1,13 +1,13 @@
 # Five-minute setup
 
 This quick start exercises the deterministic pipeline locally. SonarCloud,
-Vertex AI, protected approvals, and Docker Hub are optional until you run the
-complete GitHub Actions workflow.
+Vertex AI, Anthropic, protected approvals, and Docker Hub are optional until you
+run a complete GitHub Actions workflow.
 
 ## 1. Install prerequisites
 
 Install Docker, Python 3.11+, Git, and [Trivy](https://trivy.dev/). Install `uv`
-if you also want to run the ADK agent and its tests.
+if you also want to run either agent implementation and its tests.
 
 ```bash
 git clone https://github.com/<OWNER>/<REPOSITORY>.git
@@ -63,9 +63,10 @@ the expected test result.
 1. Create the SonarCloud project and repository secrets documented in
    [Authentication and CI configuration](AUTHENTICATION.md).
 2. Create a `container-production` GitHub Environment and require reviewers.
-3. Run **Container security release** with `Dockerfile` and `publish: false`.
-4. Inspect the overall job summary and the three report artifacts.
+3. Choose **Container security release** for Google ADK/Vertex AI or **Claude
+   comprehensive container release** for Claude Agent SDK/Sonnet 5.
+4. Run the selected workflow with `Dockerfile` and `publish: false`.
+5. Inspect the overall job summary and the three report artifacts.
 
 Keep `publish: false` until your own policy, IAM, registry, branch protection,
 and environment-review controls have been validated.
-
