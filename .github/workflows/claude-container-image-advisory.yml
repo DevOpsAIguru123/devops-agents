@@ -492,21 +492,41 @@ jobs:
           from pathlib import Path
 
           result = json.loads(Path("reports/ci-agent-review.json").read_text())
-          assert result.get("requested_model") == "claude-sonnet-5"
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+
+          require(
+              result.get("requested_model") == "claude-sonnet-5",
+              f"Unexpected requested model: {result.get('requested_model')}",
+          )
           actual_models = result.get("actual_models") or []
-          assert actual_models
-          assert all(
-              model == "claude-sonnet-5"
-              or model.startswith("claude-sonnet-5-")
-              for model in actual_models
+          require(actual_models, "Anthropic did not report model usage")
+          require(
+              all(
+                  model == "claude-sonnet-5"
+                  or model.startswith("claude-sonnet-5-")
+                  for model in actual_models
+              ),
+              f"Unexpected provider-reported model(s): {actual_models}",
           )
-          assert result.get("model_verified") is True
-          assert result.get("agent_status") == "completed", (
+          require(
+              result.get("model_verified") is True,
+              "Claude Sonnet 5 model verification failed",
+          )
+          require(
+              result.get("agent_status") == "completed",
               "Claude advisory was unavailable: "
-              f"{result.get('failure_category', 'unknown')}"
+              f"{result.get('failure_category', 'unknown')}",
           )
-          assert result.get("agent_authoritative") is False
-          assert result.get("policy_unchanged") is True
+          require(
+              result.get("agent_authoritative") is False,
+              "Claude advisory must remain non-authoritative",
+          )
+          require(
+              result.get("policy_unchanged") is True,
+              "Claude advisory changed deterministic policy",
+          )
           PY
           cat reports/ci-agent-review.md >> "$GITHUB_STEP_SUMMARY"
 

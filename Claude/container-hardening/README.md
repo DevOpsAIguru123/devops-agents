@@ -22,6 +22,8 @@ advisory fails safely if model usage is missing or reports a non-Sonnet-5 model.
 The SDK request pins both the primary and fallback model, and pins Claude Code's
 Opus, Sonnet, Haiku, and subagent aliases to the same Sonnet 5 identifier so
 background/default routing cannot introduce Opus usage.
+The advisory also uses the Agent SDK's native JSON-schema output mode, then
+revalidates the structured result and every cited finding ID locally.
 Anthropic Console billing charts aggregate usage across the selected workspace
 and date range, so Opus charges can come from unrelated Claude Code or API
 sessions that use the same Anthropic account.

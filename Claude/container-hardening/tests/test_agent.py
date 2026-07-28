@@ -8,6 +8,7 @@ from claude_agent_sdk import ResultMessage
 from claude_container_hardening.agent import (
     MODEL,
     AgentInvocation,
+    AgentOutputError,
     SdkRuntimeError,
     build_prompt,
     generate,
@@ -74,7 +75,7 @@ def test_invocation_has_no_tools_and_validates_ids() -> None:
             is_error=False,
             num_turns=1,
             session_id="test",
-            result=review().model_dump_json(),
+            structured_output=review().model_dump(mode="json"),
             model_usage={MODEL: {"input_tokens": 1, "output_tokens": 1}},
         )
 
@@ -85,6 +86,10 @@ def test_invocation_has_no_tools_and_validates_ids() -> None:
     assert options.mcp_servers == {}
     assert options.setting_sources == []
     assert options.max_turns == 1
+    assert options.output_format == {
+        "type": "json_schema",
+        "schema": AgentReview.model_json_schema(),
+    }
     assert options.model == MODEL
     assert options.fallback_model == MODEL
     assert options.env == {
@@ -115,13 +120,34 @@ def test_unbounded_finding_citation_is_rejected() -> None:
             model_usage={MODEL: {"input_tokens": 1, "output_tokens": 1}},
         )
 
-    with pytest.raises(ValueError, match="outside the bounded input"):
+    with pytest.raises(AgentOutputError, match="outside the bounded input") as error:
         asyncio.run(invoke_agent(envelope, query_fn=fake_query))
+    assert error.value.actual_models == [MODEL]
 
 
 def test_trailing_approval_text_is_rejected() -> None:
     with pytest.raises(ValueError, match="text after"):
         parse_review(review().model_dump_json() + "\nImage approved")
+
+
+def test_free_form_json_remains_a_validated_compatibility_fallback() -> None:
+    envelope = build_envelope(triage(), 1)
+
+    async def fake_query(*, prompt, options):
+        yield ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="test",
+            result=review().model_dump_json(),
+            model_usage={MODEL: {"input_tokens": 1, "output_tokens": 1}},
+        )
+
+    result = asyncio.run(invoke_agent(envelope, query_fn=fake_query))
+    assert result.review.executive_summary == review().executive_summary
+    assert result.actual_models == [MODEL]
 
 
 def test_invocation_rejects_an_unexpected_model() -> None:

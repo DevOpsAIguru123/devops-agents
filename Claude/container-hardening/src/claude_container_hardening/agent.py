@@ -33,6 +33,14 @@ class SdkRuntimeError(RuntimeError):
         super().__init__(category)
 
 
+class AgentOutputError(ValueError):
+    """Locally rejected model output with safe model provenance."""
+
+    def __init__(self, message: str, actual_models: list[str]) -> None:
+        self.actual_models = actual_models
+        super().__init__(message)
+
+
 def classify_provider_failure(messages: list[str]) -> str:
     """Classify provider diagnostics without persisting their raw content."""
     text = " ".join(messages).lower()
@@ -114,6 +122,10 @@ async def invoke_agent(
         permission_mode="dontAsk",
         setting_sources=[],
         system_prompt=SYSTEM_PROMPT,
+        output_format={
+            "type": "json_schema",
+            "schema": AgentReview.model_json_schema(),
+        },
         model=MODEL,
         fallback_model=MODEL,
         env={
@@ -143,8 +155,8 @@ async def invoke_agent(
     if final.is_error:
         provider_diagnostics.extend(final.errors or [])
         raise SdkRuntimeError(classify_provider_failure(provider_diagnostics))
-    if not final.result:
-        raise RuntimeError("Claude Agent SDK produced no final text")
+    if final.structured_output is None and not final.result:
+        raise RuntimeError("Claude Agent SDK produced no final output")
     actual_models = sorted(str(model) for model in (final.model_usage or {}))
     if not actual_models:
         raise SdkRuntimeError("model_usage_unavailable")
@@ -153,7 +165,15 @@ async def invoke_agent(
         for model in actual_models
     ):
         raise SdkRuntimeError("model_mismatch", actual_models)
-    review = validate_finding_ids(parse_review(final.result), envelope)
+    try:
+        review = (
+            AgentReview.model_validate(final.structured_output)
+            if final.structured_output is not None
+            else parse_review(final.result or "")
+        )
+        review = validate_finding_ids(review, envelope)
+    except ValueError as exc:
+        raise AgentOutputError(str(exc), actual_models) from None
     return AgentInvocation(review=review, actual_models=actual_models)
 
 
@@ -201,7 +221,7 @@ async def generate(
     try:
         invocation = await invoke(envelope)
     except Exception as exc:
-        if isinstance(exc, SdkRuntimeError):
+        if isinstance(exc, (SdkRuntimeError, AgentOutputError)):
             result["actual_models"] = exc.actual_models
         result["failure_category"] = failure_category(exc)
         return result
