@@ -88,6 +88,7 @@ publish or deploy them.
 | --- | --- | --- |
 | `ADK/container-hardening` | Flagship reference | Policy-driven Trivy and ADK container-security pipeline |
 | `Claude/container-hardening` | Standalone comparison | Tool-disabled Claude Agent SDK advisory over sanitized Trivy evidence |
+| `.github/workflows/claude-container-image-advisory.yml` | Runnable comparison | Separate Trivy image scan and Claude Sonnet 5 advisory pipeline |
 | `ADK/container-hardening/examples/agentic-devops-portfolio` | Runnable demo | Hardened and intentionally vulnerable release candidates |
 | `ADK/terraform-plan-reviewer` | Portfolio prototype | Read-only Terraform plan review agent |
 | `ADK/terraform-drift-detector` | Portfolio prototype | Read-only Terraform drift classifier |

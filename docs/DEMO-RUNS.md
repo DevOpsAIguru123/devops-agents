@@ -20,9 +20,8 @@ Expected behavior:
 3. Trivy scans the real image for vulnerabilities and embedded secrets.
 4. Deterministic policy authorizes the candidate.
 5. The ADK agent produces advisory triage when WIF is available.
-6. The optional Claude image advisory runs when `ANTHROPIC_API_KEY` is configured.
-7. The overall summary and all three deterministic reports are produced.
-8. Approval and publishing are skipped because `publish` is false.
+6. The overall summary and all three deterministic reports are produced.
+7. Approval and publishing are skipped because `publish` is false.
 
 The checked-in [clean scan summary](../ADK/container-hardening/examples/agentic-devops-portfolio/reports/scan-summary.md)
 is sanitized, point-in-time sample evidence. Always rerun current scanners.
@@ -57,6 +56,7 @@ explains the sample findings and deterministic decision.
 | `container-image-security-report-*` | Image CVEs, packages, secrets, and triage | Application and container owners |
 | `consolidated-release-security-report-*` | Overall decision, all gate results, and ADK advisory status | Release approvers and security teams |
 
-The optional `claude-image-advisory-*` artifact is a second, non-authoritative
-interpretation of the image triage evidence. It is not one of the three required
-reports and cannot affect authorization.
+The separate `Claude container image advisory` workflow produces
+`claude-container-image-report-*`. That artifact is a non-authoritative
+interpretation of image evidence only; it is not one of the three required
+release reports and cannot affect authorization.

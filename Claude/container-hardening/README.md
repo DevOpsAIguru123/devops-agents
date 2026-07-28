@@ -69,9 +69,13 @@ the Claude job to a policy authorization expression, and never allow model
 failure or model text to convert a blocked or unevaluated decision into an
 approval.
 
-The repository's `Container security release` workflow includes an optional
-`Claude image advisory triage` job. It runs after the deterministic image scan
-for trusted manual dispatches and `main` pushes, consumes the uploaded
-`ci-triage.json`, and publishes `claude-image-advisory-<run-id>`. Configure the
-GitHub Actions repository secret `ANTHROPIC_API_KEY` before running it. The job
-uses `continue-on-error` and is deliberately absent from the release gate.
+The separate `Claude container image advisory` workflow builds the selected
+image, scans it with Trivy, applies deterministic image policy, and then runs
+Claude Sonnet 5 over the bounded `ci-triage.json`. It uploads a complete
+`claude-container-image-report-<run-id>` artifact. Configure the GitHub Actions
+repository secret `ANTHROPIC_API_KEY` before running it.
+
+This workflow intentionally excludes Sonar, pre-build configuration
+authorization, protected release approval, and publishing. Use the original
+`Container security release` workflow for the complete Google ADK release
+demonstration.

@@ -36,10 +36,9 @@ gh auth login --hostname github.com
 
 The helper refuses unchanged placeholders and does not print values.
 
-The Claude image advisory runs only for a trusted manual dispatch or a push to
-`main`; it does not run for pull-request events. Store a dedicated key as the
-`ANTHROPIC_API_KEY` repository secret. The Claude job is allowed to fail and is
-not referenced by the deterministic release-approval expression.
+The separate Claude image advisory is manually dispatched and does not run for
+pull-request events. Store a dedicated key as the `ANTHROPIC_API_KEY`
+repository secret. It has no release-approval or publishing job.
 
 ## WIF requirements
 

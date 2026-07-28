@@ -153,6 +153,8 @@ async def generate(
     result: dict[str, Any] = {
         "schema_version": "container-security-agent-review/v1",
         "agent_name": "claude_agent_sdk_container_security_triage",
+        "agent_display_name": "Claude Agent SDK",
+        "agent_provider": "Anthropic",
         "model": MODEL,
         "agent_status": "unavailable",
         "agent_authoritative": False,

@@ -1,0 +1,268 @@
+name: Claude container image advisory
+
+on:
+  workflow_dispatch:
+    inputs:
+      dockerfile:
+        description: Image definition to build and scan
+        required: true
+        default: Dockerfile
+        type: choice
+        options:
+          - Dockerfile
+          - Dockerfile.vulnerable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-container-image-advisory-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_DIR: ADK/container-hardening/examples/agentic-devops-portfolio
+  LOCAL_IMAGE: claude-container-advisory:${{ github.sha }}
+  SELECTED_DOCKERFILE: ${{ inputs.dockerfile }}
+
+jobs:
+  image-security:
+    name: Build and Trivy image scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build local candidate without publishing
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          mkdir -p reports
+          docker build \
+            --file "$SELECTED_DOCKERFILE" \
+            --tag "$LOCAL_IMAGE" \
+            .
+
+      - name: Scan the real image for vulnerabilities and secrets
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          scanners: vuln,secret
+          format: json
+          output: ${{ env.APP_DIR }}/reports/ci-image-trivy.json
+          exit-code: "0"
+          version: v0.72.0
+
+      - name: Create explicit empty configuration scope
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = {
+              "SchemaVersion": 2,
+              "ArtifactName": "configuration-scan-not-in-this-workflow",
+              "ArtifactType": "filesystem",
+              "Results": [],
+          }
+          Path("reports/ci-empty-config-trivy.json").write_text(
+              json.dumps(report, indent=2) + "\n"
+          )
+          PY
+
+      - name: Apply deterministic image release policy
+        id: release-policy
+        continue-on-error: true
+        working-directory: ${{ env.APP_DIR }}
+        run: >-
+          python3 scripts/evaluate_release.py
+          --image-report reports/ci-image-trivy.json
+          --config-report reports/ci-empty-config-trivy.json
+          --output reports/ci-policy-decision.json
+
+      - name: Normalize and triage every image finding
+        if: always()
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          python3 scripts/triage_trivy.py \
+            --image-report reports/ci-image-trivy.json \
+            --config-report reports/ci-empty-config-trivy.json \
+            --policy-report reports/ci-policy-decision.json \
+            --dockerfile "$SELECTED_DOCKERFILE" \
+            --json-output reports/ci-triage.json \
+            --markdown-output reports/ci-triage.md \
+            --sarif-output reports/ci-trivy.sarif
+          python3 scripts/render_security_report.py image
+          cat reports/ci-triage.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send image findings to GitHub Code Scanning
+        if: always() && hashFiles('ADK/container-hardening/examples/agentic-devops-portfolio/reports/ci-trivy.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        with:
+          sarif_file: ${{ env.APP_DIR }}/reports/ci-trivy.sarif
+          category: trivy-claude-image-advisory
+
+      - name: Upload deterministic image evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: claude-pipeline-image-evidence-${{ github.run_id }}
+          path: |
+            ${{ env.APP_DIR }}/reports/ci-image-trivy.json
+            ${{ env.APP_DIR }}/reports/ci-policy-decision.json
+            ${{ env.APP_DIR }}/reports/ci-triage.json
+            ${{ env.APP_DIR }}/reports/ci-triage.md
+            ${{ env.APP_DIR }}/reports/ci-trivy.sarif
+            ${{ env.APP_DIR }}/reports/ci-image-security-report.html
+            ${{ env.APP_DIR }}/reports/ci-image-security-report.pdf
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce deterministic image policy
+        if: always()
+        env:
+          RELEASE_POLICY_OUTCOME: ${{ steps.release-policy.outcome }}
+        run: |
+          test "$RELEASE_POLICY_OUTCOME" = "success" || {
+            echo "Deterministic image policy blocked this candidate"
+            exit 1
+          }
+
+  claude-triage:
+    name: Claude Sonnet 5 image advisory
+    needs: image-security
+    if: always() && needs.image-security.result != 'skipped'
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download deterministic image evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: claude-pipeline-image-evidence-${{ github.run_id }}
+          path: Claude/container-hardening/.ci-input
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: Claude/container-hardening/uv.lock
+
+      - name: Install locked Claude Agent SDK dependencies
+        working-directory: Claude/container-hardening
+        run: uv sync --frozen --no-dev
+
+      - name: Install pinned Claude Code CLI
+        run: |
+          npm install --global @anthropic-ai/claude-code@2.1.220
+          echo "CLAUDE_CODE_CLI_PATH=$(command -v claude)" >> "$GITHUB_ENV"
+          claude --version
+
+      - name: Run tool-disabled Claude advisory
+        working-directory: Claude/container-hardening
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          test -n "$ANTHROPIC_API_KEY" || {
+            echo "Missing ANTHROPIC_API_KEY repository secret"
+            exit 1
+          }
+          uv run --no-sync claude-container-review \
+            --triage-report .ci-input/ci-triage.json \
+            --json-output reports/ci-claude-image-review.json \
+            --markdown-output reports/ci-claude-image-review.md
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("reports/ci-claude-image-review.json").read_text())
+          assert result.get("model") == "claude-sonnet-5"
+          assert result.get("agent_status") == "completed", (
+              "Claude advisory was unavailable: "
+              f"{result.get('failure_category', 'unknown')}"
+          )
+          assert result.get("agent_authoritative") is False
+          assert result.get("policy_unchanged") is True
+          PY
+          cat reports/ci-claude-image-review.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Claude advisory evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: claude-pipeline-advisory-${{ github.run_id }}
+          path: |
+            Claude/container-hardening/reports/ci-claude-image-review.json
+            Claude/container-hardening/reports/ci-claude-image-review.md
+          if-no-files-found: warn
+          retention-days: 30
+
+  overall:
+    name: Overall Claude image advisory
+    needs:
+      - image-security
+      - claude-triage
+    if: always() && needs.image-security.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download deterministic image evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: claude-pipeline-image-evidence-${{ github.run_id }}
+          path: summary/image
+
+      - name: Download Claude advisory evidence when available
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: claude-pipeline-advisory-${{ github.run_id }}
+          path: summary/claude
+
+      - name: Generate overall image advisory summary
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          policy = json.loads(Path("summary/image/ci-policy-decision.json").read_text())
+          agent_path = Path("summary/claude/ci-claude-image-review.json")
+          agent = (
+              json.loads(agent_path.read_text())
+              if agent_path.is_file()
+              else {"agent_status": "unavailable", "model": "claude-sonnet-5"}
+          )
+          decision = policy.get("policy_decision", "not_evaluated")
+          lines = [
+              "# Claude container image advisory",
+              "",
+              f"**Deterministic image decision:** `{decision}`  ",
+              f"**Claude status:** `{agent.get('agent_status', 'unavailable')}`  ",
+              f"**Model:** `{agent.get('model', 'claude-sonnet-5')}`",
+              "",
+              "> Claude is advisory only. It cannot approve, reject, waive, or publish an image.",
+              "> `policy_decision: not_evaluated` is not approval.",
+              "",
+              "This workflow intentionally excludes Sonar and pre-build configuration authorization.",
+          ]
+          output = Path("summary/claude-image-advisory-summary.md")
+          output.write_text("\n".join(lines) + "\n")
+          print(output.read_text())
+          PY
+          cat summary/claude-image-advisory-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload complete Claude pipeline report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: claude-container-image-report-${{ github.run_id }}
+          path: summary
+          if-no-files-found: error
+          retention-days: 30

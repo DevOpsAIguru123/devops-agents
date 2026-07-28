@@ -8,7 +8,6 @@ on:
       - "ADK/container-hardening/scripts/**"
       - "ADK/container-hardening/pyproject.toml"
       - "ADK/container-hardening/uv.lock"
-      - "Claude/container-hardening/**"
       - ".github/workflows/container-security-release.yml"
   push:
     branches:
@@ -19,7 +18,6 @@ on:
       - "ADK/container-hardening/scripts/**"
       - "ADK/container-hardening/pyproject.toml"
       - "ADK/container-hardening/uv.lock"
-      - "Claude/container-hardening/**"
       - ".github/workflows/container-security-release.yml"
   workflow_dispatch:
     inputs:
@@ -499,83 +497,6 @@ jobs:
           path: |
             ADK/container-hardening/reports/ci-agent-review.json
             ADK/container-hardening/reports/ci-agent-review.md
-          if-no-files-found: warn
-          retention-days: 30
-
-  claude-image-triage:
-    name: Claude image advisory triage
-    needs: container-security
-    if: >-
-      always() &&
-      needs.container-security.result != 'skipped' &&
-      (github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main'))
-    continue-on-error: true
-    permissions:
-      contents: read
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Check out source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Download deterministic image triage evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: container-scan-evidence-${{ github.run_id }}
-          path: Claude/container-hardening/.ci-input
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: Claude/container-hardening/uv.lock
-
-      - name: Install locked Claude Agent SDK dependencies
-        working-directory: Claude/container-hardening
-        run: uv sync --frozen --no-dev
-
-      - name: Install pinned Claude Code CLI
-        run: |
-          npm install --global @anthropic-ai/claude-code@2.1.220
-          echo "CLAUDE_CODE_CLI_PATH=$(command -v claude)" >> "$GITHUB_ENV"
-          claude --version
-
-      - name: Run tool-disabled Claude image advisory
-        working-directory: Claude/container-hardening
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          test -n "$ANTHROPIC_API_KEY" || {
-            echo "Missing ANTHROPIC_API_KEY repository secret"
-            exit 1
-          }
-          uv run --no-sync claude-container-review \
-            --triage-report .ci-input/ci-triage.json \
-            --json-output reports/ci-claude-image-review.json \
-            --markdown-output reports/ci-claude-image-review.md
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          result = json.loads(Path("reports/ci-claude-image-review.json").read_text())
-          assert result.get("agent_status") == "completed", (
-              "Claude advisory was unavailable: "
-              f"{result.get('failure_category', 'unknown')}"
-          )
-          assert result.get("agent_authoritative") is False
-          assert result.get("policy_unchanged") is True
-          PY
-          cat reports/ci-claude-image-review.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload Claude image advisory evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: claude-image-advisory-${{ github.run_id }}
-          path: |
-            Claude/container-hardening/reports/ci-claude-image-review.json
-            Claude/container-hardening/reports/ci-claude-image-review.md
           if-no-files-found: warn
           retention-days: 30
 
