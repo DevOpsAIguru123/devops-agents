@@ -1,6 +1,11 @@
 name: Claude container image advisory
 
 on:
+  pull_request:
+    paths:
+      - "Claude/container-hardening/**"
+      - "ADK/container-hardening/examples/agentic-devops-portfolio/**"
+      - ".github/workflows/claude-container-image-advisory.yml"
   workflow_dispatch:
     inputs:
       dockerfile:
@@ -22,7 +27,7 @@ concurrency:
 env:
   APP_DIR: ADK/container-hardening/examples/agentic-devops-portfolio
   LOCAL_IMAGE: claude-container-advisory:${{ github.sha }}
-  SELECTED_DOCKERFILE: ${{ inputs.dockerfile }}
+  SELECTED_DOCKERFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.dockerfile || 'Dockerfile' }}
 
 jobs:
   image-security:
