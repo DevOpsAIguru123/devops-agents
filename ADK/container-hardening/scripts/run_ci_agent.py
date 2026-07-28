@@ -154,13 +154,17 @@ def markdown(value: Any) -> str:
 
 
 def render_markdown(result: dict[str, Any]) -> str:
+    agent_name = markdown(result.get("agent_display_name") or "ADK")
+    agent_provider = markdown(result.get("agent_provider") or "Vertex AI/ADK")
     lines = [
-        "# ADK container security agent review",
+        f"# {agent_name} container security agent review",
         "",
+        "**Overall release decision:** `not_evaluated`  ",
         f"**Agent status:** `{markdown(result['agent_status'])}`  ",
-        f"**Deterministic policy decision:** `{markdown(result['policy_decision'])}`",
+        f"**Scoped container policy decision:** `{markdown(result['policy_decision'])}`",
         "",
-        "> This Vertex AI/ADK review is advisory. It cannot approve, reject, "
+        "> The overall release decision is computed only in the consolidated report after all required gates complete. ",
+        f"> This {agent_provider} review is advisory. It cannot approve, reject, "
         "waive, or override the deterministic release policy. "
         "`policy_decision: not_evaluated` is not approval.",
         "",
@@ -251,6 +255,8 @@ async def generate(triage: dict[str, Any], max_findings: int) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema_version": "container-security-agent-review/v1",
         "agent_name": ci_triage_agent.name,
+        "agent_display_name": "ADK",
+        "agent_provider": "Vertex AI/Google ADK",
         "agent_status": "unavailable",
         "agent_authoritative": False,
         "policy_decision": envelope["policy_decision"],

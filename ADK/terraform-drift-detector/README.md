@@ -1,5 +1,10 @@
 # Terraform Drift Detector ADK Agent
 
+> **Portfolio prototype:** Terraform plan text and model-generated notification
+> content are untrusted. Add deterministic classification, output filtering,
+> WIF, and operational review before production use. See
+> [production readiness](../../docs/PRODUCTION-READINESS.md).
+
 Reviews Terraform Cloud refresh-only plan output and reports whether remote
 infrastructure has drifted from Terraform state/configuration.
 
@@ -22,8 +27,10 @@ structured JSON:
 }
 ```
 
-When `drift_detected` is `true`, the workflow posts `discord_message` to the
-Discord webhook configured in GitHub Secrets.
+The Terraform detailed exit code—not the model—decides whether drift occurred.
+When Terraform returns `2`, the workflow posts a fixed notification containing
+only a protected workflow-run link. Model-generated plan text is not sent to
+Discord or printed to the Actions log.
 
 ## Flow
 
@@ -42,7 +49,7 @@ GitHub Actions
 flowchart LR
     trigger["Manual or scheduled GitHub Actions trigger"]
     checkout["Checkout agents repo"]
-    tfc["Terraform Cloud workspace<br/>devops_vv / agents"]
+    tfc["Terraform Cloud workspace<br/>&lt;ORGANIZATION&gt; / &lt;WORKSPACE&gt;"]
     plan["Refresh-only Terraform plan<br/>terraform plan -refresh-only"]
     runner["ADK drift runner<br/>run_drift_review.py"]
     agent["Terraform drift detector agent<br/>agent.py"]
@@ -108,7 +115,7 @@ notify.
 
 ## Required Secrets
 
-Store these in the `DevOpsAIguru123/agents` repo under:
+Store these in your repository under:
 
 ```text
 Settings -> Secrets and variables -> Actions
@@ -129,8 +136,8 @@ DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 ## Terraform Cloud Target
 
 ```text
-organization: devops_vv
-workspace: agents
+organization: REPLACE_WITH_TFC_ORGANIZATION
+workspace: REPLACE_WITH_TFC_WORKSPACE
 ```
 
 The current sample watches:
@@ -172,7 +179,9 @@ Drift detected for `google_storage_bucket.sample`. Storage class changed from `S
 
 Screenshot of the Discord alert:
 
-![Terraform drift alert in Discord](assets/discord-drift-alert.png)
+For a public repository, use a synthetic screenshot with fictional workspace,
+channel, and account names. Do not publish screenshots from a real operations
+channel.
 
 ## Local Test
 

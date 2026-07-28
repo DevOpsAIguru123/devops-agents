@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.venv
+__pycache__
+.pytest_cache
+.adk
+.google-agents-cli
+gha-creds-*.json
+tests

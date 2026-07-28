@@ -2,9 +2,7 @@
 name = "container-hardening"
 version = "0.1.0"
 description = "A policy-driven container hardening copilot backed by Trivy and Google ADK."
-authors = [
-    {name = "Your Name", email = "your@email.com"},
-]
+authors = [{name = "DevOps Agents contributors"}]
 
 dependencies = [
     "google-adk[gcp]>=2.0.0,<3.0.0",

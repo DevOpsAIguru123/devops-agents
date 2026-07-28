@@ -1,5 +1,10 @@
 # Policy-Driven Container Hardening Copilot
 
+> **Flagship reference implementation:** the deterministic controls and tests
+> are runnable, but deployment, IAM, admission policy, and operational controls
+> must be adapted before production use. See the repository's
+> [production-readiness guide](../../docs/PRODUCTION-READINESS.md).
+
 A read-only Google ADK agent that uses Trivy for deterministic container and
 configuration findings, then explains risk, correlates attack paths, and
 proposes application-aware remediation.

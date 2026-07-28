@@ -1,5 +1,10 @@
 # DevOps Deep Research Agent
 
+> **Portfolio prototype:** the generated HTTP service has no application-level
+> authentication in this repository. Keep it local unless you add identity,
+> authorization, rate limiting, and deployment controls. See
+> [production readiness](../../docs/PRODUCTION-READINESS.md).
+
 Google ADK agent for DevOps, SRE, platform engineering, cloud infrastructure,
 CI/CD, observability, security, FinOps, and internal developer platform research.
 

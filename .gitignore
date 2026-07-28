@@ -1,7 +1,10 @@
 __pycache__/
 *.py[cod]
+.DS_Store
 .env
 .github/container-release.settings
+gha-creds-*.json
+**/reports/local/
 .venv/
 .pytest_cache/
 .terraform/

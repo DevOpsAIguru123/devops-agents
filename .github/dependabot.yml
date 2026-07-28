@@ -1,0 +1,38 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - security
+
+  - package-ecosystem: pip
+    directory: /ADK/container-hardening
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+
+  - package-ecosystem: pip
+    directory: /ADK/devops-research-agent
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+
+  - package-ecosystem: pip
+    directory: /ADK/terraform-plan-reviewer
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+
+  - package-ecosystem: pip
+    directory: /ADK/terraform-drift-detector
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+

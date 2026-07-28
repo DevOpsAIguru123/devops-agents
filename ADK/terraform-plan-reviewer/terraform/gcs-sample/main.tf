@@ -2,10 +2,10 @@ terraform {
   required_version = "1.15.7"
 
   cloud {
-    organization = "devops_vv"
+    organization = "REPLACE_WITH_TFC_ORGANIZATION"
 
     workspaces {
-      name = "agents"
+      name = "REPLACE_WITH_TFC_WORKSPACE"
     }
   }
 
