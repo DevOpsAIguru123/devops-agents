@@ -19,6 +19,9 @@ reject, waive, publish, or change a release decision. In particular,
 The implementation pins `claude-sonnet-5`. Every JSON and Markdown advisory
 records both the requested model and the model usage reported by Anthropic. The
 advisory fails safely if model usage is missing or reports a non-Sonnet-5 model.
+The SDK request pins both the primary and fallback model, and pins Claude Code's
+Opus, Sonnet, Haiku, and subagent aliases to the same Sonnet 5 identifier so
+background/default routing cannot introduce Opus usage.
 Anthropic Console billing charts aggregate usage across the selected workspace
 and date range, so Opus charges can come from unrelated Claude Code or API
 sessions that use the same Anthropic account.
@@ -73,13 +76,16 @@ the Claude job to a policy authorization expression, and never allow model
 failure or model text to convert a blocked or unevaluated decision into an
 approval.
 
-The separate `Claude container image advisory` workflow builds the selected
-image, scans it with Trivy, applies deterministic image policy, and then runs
-Claude Sonnet 5 over the bounded `ci-triage.json`. It uploads a complete
-`claude-container-image-report-<run-id>` artifact. Configure the GitHub Actions
+The separate `Claude comprehensive container release` workflow has the same
+deterministic release controls as the Google ADK workflow: SonarCloud analysis,
+pre-build Trivy configuration policy, image vulnerability and secret scanning,
+three HTML/PDF report layers, protected environment approval, and authorized
+Docker Hub publishing. Its only agent stage is the tool-disabled Claude Sonnet
+5 advisory over bounded `ci-triage.json` evidence. Configure the GitHub Actions
 repository secret `ANTHROPIC_API_KEY` before running it.
 
-This workflow intentionally excludes Sonar, pre-build configuration
-authorization, protected release approval, and publishing. Use the original
-`Container security release` workflow for the complete Google ADK release
+The three report artifacts are the pre-build code/configuration report, the
+container image security report, and the consolidated release security report.
+Claude remains advisory and is never included in the deterministic release
+authorization expression.
 demonstration.

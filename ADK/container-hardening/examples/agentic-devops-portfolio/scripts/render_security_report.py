@@ -456,7 +456,7 @@ def html_list(items: list[str], empty_message: str) -> str:
 
 
 def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -> str:
-    """Render the authoritative scanner decisions with a bounded ADK advisory."""
+    """Render authoritative scanner decisions with a bounded AI advisory."""
     authority = unified.get("authority") if isinstance(unified.get("authority"), dict) else {}
     summary = unified.get("summary") if isinstance(unified.get("summary"), dict) else {}
     sonar = unified.get("code_scan") if isinstance(unified.get("code_scan"), dict) else {}
@@ -473,12 +473,13 @@ def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -
     release_ready = bool(authority.get("overall_release_ready"))
     release_status = "approved" if release_ready else "blocked"
     agent_status = str(agent.get("agent_status") or "unavailable")
+    agent_label = str(agent.get("agent_display_name") or "AI agent")
     agent_review = agent.get("review") if isinstance(agent.get("review"), dict) else {}
 
     decision_rows = [
         ("SonarQube code quality", sonar_status, "Source-code quality and security rules"),
         ("Trivy container release policy", policy_decision, "Vulnerabilities, secrets, and configuration"),
-        ("ADK advisory", agent_status, "Non-authoritative prioritization and remediation guidance"),
+        (f"{agent_label} advisory", agent_status, "Non-authoritative prioritization and remediation guidance"),
         ("Overall deterministic release", release_status, "Requires every authoritative gate to pass"),
     ]
     decision_table = (
@@ -528,7 +529,7 @@ def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -
         + "<section><h2>Decision basis</h2>"
         f"<p>The deterministic release status is <strong class='decision {text(release_status)}'>{text(release_status)}</strong>. "
         f"SonarQube reported <strong>{text(sonar_status)}</strong> and the Trivy release policy reported "
-        f"<strong>{text(policy_decision)}</strong>. The ADK agent status is <strong>{text(agent_status)}</strong>; its output "
+        f"<strong>{text(policy_decision)}</strong>. The {text(agent_label)} status is <strong>{text(agent_status)}</strong>; its output "
         "is advisory and cannot approve, reject, waive, or override either scanner gate.</p>"
         + metric_cards(
             [
@@ -547,7 +548,7 @@ def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -
         "The table shows up to the first 20 deterministic container findings in policy-prioritized order; detailed "
         "code/configuration and image reports remain the audit surfaces for complete finding lists.</p>"
         + paged_tables(prioritized_header, prioritized_rows, 6)
-        + "</section><section><h2>ADK advisory interpretation</h2>"
+        + f"</section><section><h2>{text(agent_label)} advisory interpretation</h2>"
         f"<div class='notice'><strong>Agent status: {text(agent_status)}.</strong> {text(executive_summary)}</div>"
         f"<h3>Risk assessment</h3><p>{text(risk_assessment)}</p>"
         + "<h3>Prioritized actions</h3>"
@@ -557,7 +558,7 @@ def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -
         + "</section><section><h2>Scope and methodology</h2>"
         "<p>SonarQube supplies source-code findings and its quality-gate decision. Trivy supplies configuration, package "
         "vulnerability, and secret-detection evidence for the exact candidate. Deterministic scripts normalize findings and "
-        "enforce release policy before the ADK agent receives bounded, sanitized evidence.</p></section>"
+        f"enforce release policy before the {text(agent_label)} receives bounded, sanitized evidence.</p></section>"
         "<section><h2>Limitations and robustness</h2>"
         + html_list(
             limitations,
@@ -575,7 +576,7 @@ def render_consolidated_report(unified: dict[str, Any], agent: dict[str, Any]) -
     )
     return document(
         "Consolidated Release Security Report",
-        "SonarQube, Trivy, deterministic policy, and bounded ADK advisory evidence",
+        f"SonarQube, Trivy, deterministic policy, and bounded {text(agent_label)} advisory evidence",
         body,
     )
 

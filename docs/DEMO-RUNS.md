@@ -54,9 +54,9 @@ explains the sample findings and deterministic decision.
 | --- | --- | --- |
 | `pre-build-security-report-*` | Sonar code findings plus Trivy misconfigurations | Developers and platform engineers |
 | `container-image-security-report-*` | Image CVEs, packages, secrets, and triage | Application and container owners |
-| `consolidated-release-security-report-*` | Overall decision, all gate results, and ADK advisory status | Release approvers and security teams |
+| `consolidated-release-security-report-*` | Overall decision, all gate results, and provider-specific advisory status | Release approvers and security teams |
 
-The separate `Claude container image advisory` workflow produces
-`claude-container-image-report-*`. That artifact is a non-authoritative
-interpretation of image evidence only; it is not one of the three required
-release reports and cannot affect authorization.
+The separate `Claude comprehensive container release` workflow produces the
+same three required reports and deterministic decisions as the Google ADK
+workflow. Its consolidated report contains a non-authoritative Claude Sonnet 5
+interpretation; that interpretation cannot affect authorization.

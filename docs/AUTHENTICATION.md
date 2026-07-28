@@ -19,7 +19,7 @@ Create these under **Settings → Secrets and variables → Actions**:
 | `DOCKERHUB_USERNAME` | Secret in this reference | Docker Hub namespace |
 | `DOCKERHUB_REPOSITORY` | Secret in this reference | Existing repository name |
 | `DOCKERHUB_TOKEN` | Secret | Least-privilege Docker Hub access token |
-| `ANTHROPIC_API_KEY` | Secret | Dedicated key for the optional Claude image advisory |
+| `ANTHROPIC_API_KEY` | Secret | Dedicated key for the Claude Sonnet 5 advisory stage |
 
 The WIF provider, service-account email, project ID, and Docker namespace are
 identifiers rather than credentials. This reference stores them as secrets to
@@ -36,9 +36,11 @@ gh auth login --hostname github.com
 
 The helper refuses unchanged placeholders and does not print values.
 
-The separate Claude image advisory is manually dispatched and does not run for
-pull-request events. Store a dedicated key as the `ANTHROPIC_API_KEY`
-repository secret. It has no release-approval or publishing job.
+The separate Claude comprehensive release workflow runs for matching pull
+requests, trusted main-branch changes, and manual dispatches. Store a dedicated
+key as the `ANTHROPIC_API_KEY` repository secret. Release approval and
+publishing use the same deterministic policy and protected environment as the
+Google ADK workflow; Claude output cannot satisfy either authorization gate.
 
 ## WIF requirements
 

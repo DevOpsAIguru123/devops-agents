@@ -86,6 +86,14 @@ def test_invocation_has_no_tools_and_validates_ids() -> None:
     assert options.setting_sources == []
     assert options.max_turns == 1
     assert options.model == MODEL
+    assert options.fallback_model == MODEL
+    assert options.env == {
+        "ANTHROPIC_MODEL": MODEL,
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": MODEL,
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": MODEL,
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": MODEL,
+        "CLAUDE_CODE_SUBAGENT_MODEL": MODEL,
+    }
     assert result.review.prioritized_actions[0].finding_ids == ["CVE-2026-0001"]
     assert result.actual_models == [MODEL]
 
@@ -134,6 +142,7 @@ def test_invocation_rejects_an_unexpected_model() -> None:
     with pytest.raises(SdkRuntimeError) as error:
         asyncio.run(invoke_agent(envelope, query_fn=fake_query))
     assert error.value.category == "model_mismatch"
+    assert error.value.actual_models == ["claude-opus-4-8"]
 
 
 def test_invocation_requires_provider_model_usage() -> None:
@@ -164,6 +173,19 @@ def test_completed_result_attests_reported_model() -> None:
     assert result["requested_model"] == MODEL
     assert result["actual_models"] == [MODEL]
     assert result["model_verified"] is True
+
+
+def test_model_mismatch_records_actual_model_without_changing_policy() -> None:
+    async def mismatched_invoke(_envelope):
+        raise SdkRuntimeError("model_mismatch", ["claude-opus-4-8"])
+
+    result = asyncio.run(generate(triage(), 1, invoke=mismatched_invoke))
+    assert result["agent_status"] == "unavailable"
+    assert result["failure_category"] == "model_mismatch"
+    assert result["actual_models"] == ["claude-opus-4-8"]
+    assert result["model_verified"] is False
+    assert result["policy_decision"] == "blocked"
+    assert result["policy_unchanged"] is True
 
 
 def test_model_failure_cannot_change_policy() -> None:

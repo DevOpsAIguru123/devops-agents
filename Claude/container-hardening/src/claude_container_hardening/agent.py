@@ -27,8 +27,9 @@ class AgentInvocation:
 class SdkRuntimeError(RuntimeError):
     """Provider failure carrying only a safe diagnostic category."""
 
-    def __init__(self, category: str) -> None:
+    def __init__(self, category: str, actual_models: list[str] | None = None) -> None:
         self.category = category
+        self.actual_models = actual_models or []
         super().__init__(category)
 
 
@@ -114,6 +115,14 @@ async def invoke_agent(
         setting_sources=[],
         system_prompt=SYSTEM_PROMPT,
         model=MODEL,
+        fallback_model=MODEL,
+        env={
+            "ANTHROPIC_MODEL": MODEL,
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": MODEL,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": MODEL,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": MODEL,
+            "CLAUDE_CODE_SUBAGENT_MODEL": MODEL,
+        },
         max_turns=1,
         max_budget_usd=0.25,
         cli_path=os.getenv("CLAUDE_CODE_CLI_PATH") or None,
@@ -143,7 +152,7 @@ async def invoke_agent(
         model != MODEL and not model.startswith(f"{MODEL}-")
         for model in actual_models
     ):
-        raise SdkRuntimeError("model_mismatch")
+        raise SdkRuntimeError("model_mismatch", actual_models)
     review = validate_finding_ids(parse_review(final.result), envelope)
     return AgentInvocation(review=review, actual_models=actual_models)
 
@@ -192,6 +201,8 @@ async def generate(
     try:
         invocation = await invoke(envelope)
     except Exception as exc:
+        if isinstance(exc, SdkRuntimeError):
+            result["actual_models"] = exc.actual_models
         result["failure_category"] = failure_category(exc)
         return result
     result["agent_status"] = "completed"
