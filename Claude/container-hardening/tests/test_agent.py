@@ -6,6 +6,7 @@ import pytest
 from claude_agent_sdk import ResultMessage
 
 from claude_container_hardening.agent import (
+    MODEL,
     build_prompt,
     generate,
     invoke_agent,
@@ -81,6 +82,7 @@ def test_invocation_has_no_tools_and_validates_ids() -> None:
     assert options.mcp_servers == {}
     assert options.setting_sources == []
     assert options.max_turns == 1
+    assert options.model == MODEL
     assert result.prioritized_actions[0].finding_ids == ["CVE-2026-0001"]
 
 
@@ -116,6 +118,7 @@ def test_model_failure_cannot_change_policy() -> None:
     result = asyncio.run(generate(triage(), 1, invoke=failed_invoke))
     assert result["agent_status"] == "unavailable"
     assert result["failure_category"] == "sdk_runtime_error"
+    assert result["model"] == MODEL
     assert result["agent_authoritative"] is False
     assert result["policy_decision"] == "blocked"
     assert result["policy_unchanged"] is True

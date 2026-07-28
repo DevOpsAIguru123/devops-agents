@@ -25,6 +25,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         "# Claude Agent SDK container security review",
         "",
         "**Overall release decision:** `not_evaluated`  ",
+        f"**Model:** `{safe(result['model'])}`  ",
         f"**Agent status:** `{safe(result['agent_status'])}`  ",
         "**Scoped deterministic policy decision:** "
         f"`{safe(result['policy_decision'])}`",

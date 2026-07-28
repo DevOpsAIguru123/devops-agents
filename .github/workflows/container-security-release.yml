@@ -535,6 +535,12 @@ jobs:
         working-directory: Claude/container-hardening
         run: uv sync --frozen --no-dev
 
+      - name: Install pinned Claude Code CLI
+        run: |
+          npm install --global @anthropic-ai/claude-code@2.1.220
+          echo "CLAUDE_CODE_CLI_PATH=$(command -v claude)" >> "$GITHUB_ENV"
+          claude --version
+
       - name: Run tool-disabled Claude image advisory
         working-directory: Claude/container-hardening
         env:

@@ -16,6 +16,9 @@ single turn, and returns a locally validated advisory. It cannot approve,
 reject, waive, publish, or change a release decision. In particular,
 `policy_decision: not_evaluated` is not approval.
 
+The implementation pins `claude-sonnet-5`; the requested model ID is recorded
+in every JSON and Markdown advisory for reproducibility.
+
 ## Five-minute test
 
 Requirements: Python 3.11+, `uv`, and either an existing Claude Code login or
